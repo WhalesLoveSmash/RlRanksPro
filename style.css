@@ -7,6 +7,7 @@
   --line:#223147;
   --accent:#6aa7ff;
   --good:#6bd38a;
+  --warn:#ffd36a;
   --chip:#1a2436;
 }
 
@@ -32,14 +33,25 @@ body{
   border-radius:18px;
   box-shadow:0 12px 28px rgba(0,0,0,.35);
   padding:18px;
+  margin-bottom:14px;
 }
+
+.step{margin:0 0 10px;font-size:16px;color:var(--muted);letter-spacing:.2px}
 
 .grid{
   display:grid;
   gap:14px;
   grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
 }
+.fetch-grid{
+  display:grid;
+  gap:12px;
+  grid-template-columns:1fr auto;
+}
+.fetch-grid .full{grid-column:1/-1}
+
 label{display:grid;gap:6px;color:var(--muted);font-size:14px}
+label .alt{opacity:.8;margin-left:6px}
 label.full{grid-column:1/-1}
 small{color:var(--muted);opacity:.9}
 
@@ -54,18 +66,18 @@ input,button{
   outline:none;
 }
 input:focus{border-color:var(--accent)}
-.row{display:flex;gap:10px;align-items:center}
 
 button.primary{
   cursor:pointer;
   font-weight:800;
   background:linear-gradient(180deg,#3680ff,#2354c7);
   border-color:transparent;
+  padding:12px 16px;
 }
 button.primary:hover{filter:brightness(1.05)}
-button.ghost{cursor:pointer;background:transparent;border-style:dashed}
 
-.actions{margin-top:8px;text-align:right}
+.actions{margin-top:10px;text-align:right}
+
 .tag{
   background:var(--chip);
   border:1px solid var(--line);
@@ -75,7 +87,24 @@ button.ghost{cursor:pointer;background:transparent;border-style:dashed}
   color:var(--ink);
 }
 
+.backup{margin-top:12px}
+.backup summary{cursor:pointer;color:var(--ink);font-weight:700}
+.backup[open]{border-top:1px dashed var(--line);padding-top:12px;margin-top:14px}
+
 .hide{display:none}
+
+/* status */
+.status{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:var(--chip);
+  color:var(--ink);
+  font-size:14px;
+}
+.status.ok{border-color:#2f5f3d;background:linear-gradient(180deg,#11221a,#0e171a)}
+.status.warn{border-color:#5e4b1d}
 
 /* output */
 .head{display:flex;gap:12px;align-items:center;justify-content:space-between}
@@ -100,10 +129,12 @@ button.ghost{cursor:pointer;background:transparent;border-style:dashed}
 .badge .v{font-weight:800;margin:4px 0}
 .badge .s{color:var(--muted)}
 
-.chart{margin-top:8px}
+/* chart */
+.chart{margin-top:10px}
 svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:14px;background:#0c1320}
 .gridline{stroke:#1b2940;stroke-width:1}
-.path{fill:none;stroke:var(--good);stroke-width:3}
+.path{fill:none;stroke:var(--good);stroke-width:4}
+.area{fill:linear-gradient(180deg,rgba(107,211,138,.35),rgba(107,211,138,0));}
 .currMark{fill:var(--accent)}
 .projMark{fill:var(--good)}
 .axis{
@@ -115,4 +146,5 @@ svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-rad
 @media (max-width:480px){
   .top h1{font-size:28px}
   .badge .v{font-size:14px}
+  .fetch-grid{grid-template-columns:1fr}
 }

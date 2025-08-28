@@ -3,44 +3,55 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>RL Ranks Pro — 2v2 Predictor</title>
+  <title>2v2 Rank Predictor — RL Ranks Pro</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="wrap">
     <header class="top">
       <h1>2v2 Rank Predictor</h1>
-      <p class="sub">Current MMR + projected path over the next N games.</p>
+      <p class="sub">Paste your RLTracker profile → pull current MMR + recent Win% → see the projected path.</p>
     </header>
 
-    <form id="form" class="card">
+    <!-- STEP 1: FETCH FIRST -->
+    <section class="card">
+      <h2 class="step">Step 1 · Fetch from RLTracker</h2>
+      <div class="fetch-grid">
+        <label class="full">
+          RLTracker URL <span class="alt">or just your Steam name</span>
+          <input id="trackerInput" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/WhalesLoveSmash/overview  •  or  •  WhalesLoveSmash" />
+          <small>If only a name is entered, it uses <code>/profile/steam/&lt;name&gt;/overview</code>.</small>
+        </label>
+        <button id="btnFetch" class="primary">Fetch Ranked 2v2</button>
+      </div>
+
+      <div id="fetchStatus" class="status hide"></div>
+
+      <details class="backup">
+        <summary>Manual backup (only if fetch fails)</summary>
+        <div class="grid">
+          <label>
+            Current 2v2 MMR
+            <input id="mmr" type="number" min="-100" max="4000" placeholder="e.g., 1065" />
+          </label>
+
+          <label>
+            Recent Win %
+            <input id="win" type="number" min="0" max="100" placeholder="e.g., 58" />
+          </label>
+
+          <label class="full">
+            Display name (optional)
+            <input id="name" placeholder="player" />
+          </label>
+        </div>
+      </details>
+    </section>
+
+    <!-- STEP 2: SETTINGS + PREDICT -->
+    <section class="card">
+      <h2 class="step">Step 2 · Projection settings</h2>
       <div class="grid">
-        <label>
-          Display name (optional)
-          <input id="name" placeholder="player" />
-          <small>Shown in the header only.</small>
-        </label>
-
-        <label>
-          RLTracker URL or Steam name
-          <input id="trackerInput" placeholder="Paste full URL or just Steam name (e.g., WhalesLoveSmash)" />
-          <small>If you enter only a name, it uses <code>/profile/steam/&lt;name&gt;/overview</code>.</small>
-        </label>
-
-        <label>
-          Current 2v2 MMR
-          <div class="row">
-            <input id="mmr" type="number" min="-100" max="4000" placeholder="auto from RLTracker" />
-            <button type="button" id="btnFetch" class="ghost">Fetch</button>
-          </div>
-          <small>Fetch tries to read your Ranked Doubles 2v2 MMR and recent Win%.</small>
-        </label>
-
-        <label>
-          Recent Win %
-          <input id="win" type="number" min="0" max="100" value="60" />
-        </label>
-
         <label>
           Games to project
           <input id="games" type="number" min="1" max="200" value="25" />
@@ -49,17 +60,19 @@
         <label class="full">
           Win% regression toward 50% as you climb
           <div class="row">
-            <input id="regress" type="range" min="0" max="100" value="20" />
-            <span id="regressTag" class="tag">20% • gentle</span>
+            <input id="regress" type="range" min="0" max="100" value="30" />
+            <span id="regressTag" class="tag">30% • medium</span>
           </div>
+          <small>0% = never regresses (optimistic). 100% = snaps toward 50% very quickly (harsh).</small>
         </label>
       </div>
 
       <div class="actions">
-        <button type="submit" class="primary">Predict</button>
+        <button id="btnPredict" class="primary">Predict</button>
       </div>
-    </form>
+    </section>
 
+    <!-- OUTPUT -->
     <section id="out" class="card hide">
       <div class="head">
         <h2 id="title">2v2 Doubles</h2>
@@ -70,17 +83,17 @@
         <div class="badge">
           <div class="k">Current</div>
           <div class="v" id="currRank">—</div>
-          <div class="s"><span id="currMMR">—</span> MMR</div>
+          <div class="s"><span id="currMMR">—</span> MMR · <span id="currWR">—</span>% WR</div>
         </div>
         <div class="badge">
           <div class="k">Projected</div>
           <div class="v" id="projRank">—</div>
-          <div class="s"><span id="projMMR">—</span> MMR</div>
+          <div class="s"><span id="projMMR">—</span> MMR · <span id="projWR">—</span>% WR (final)</div>
         </div>
       </div>
 
       <div class="chart">
-        <svg id="svg" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
+        <svg id="svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
         <div class="axis">
           <span id="x0">0</span>
           <span id="xMid">—</span>
@@ -90,9 +103,10 @@
     </section>
 
     <footer class="foot">
-      <small>2v2 thresholds are embedded. “Fetch” reads RLTracker via a read-only proxy and targets the Ranked Doubles 2v2 MMR block.</small>
+      <small>“Fetch” targets the <strong>Ranked Doubles 2v2</strong> block. Manual fields are a fallback.</small>
     </footer>
   </main>
   <script src="script.js"></script>
+  <script src="monetize.js"></script>
 </body>
 </html>

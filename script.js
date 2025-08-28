@@ -92,15 +92,18 @@ const GLOBAL_MAX = R2[0][3];
 const BASE_WIN = 10, BASE_LOSS = 10;
 
 /********** DOM **********/
-const elForm = document.getElementById("form");
-const elName = document.getElementById("name");
-const elInput = document.getElementById("trackerInput");
+const elTracker = document.getElementById("trackerInput");
 const elFetch = document.getElementById("btnFetch");
+const elStatus = document.getElementById("fetchStatus");
+
 const elMMR = document.getElementById("mmr");
 const elWin = document.getElementById("win");
+const elName = document.getElementById("name");
+
 const elGames = document.getElementById("games");
 const elReg = document.getElementById("regress");
 const elRegTag = document.getElementById("regressTag");
+const elPredict = document.getElementById("btnPredict");
 
 const out = document.getElementById("out");
 const title = document.getElementById("title");
@@ -108,6 +111,9 @@ const currRank = document.getElementById("currRank");
 const projRank = document.getElementById("projRank");
 const currMMR = document.getElementById("currMMR");
 const projMMR = document.getElementById("projMMR");
+const currWR = document.getElementById("currWR");
+const projWR = document.getElementById("projWR");
+
 const svg = document.getElementById("svg");
 const x0 = document.getElementById("x0");
 const xMid = document.getElementById("xMid");
@@ -121,10 +127,7 @@ function bucket(m){
 }
 function labelRank(b){ return `${b.t}${b.d!=="—" ? " "+b.d:""} (${b.lo}–${b.hi})`; }
 
-/* Build RLTracker URL:
-   - If input is full URL, use as-is.
-   - Else treat input as Steam name -> https://rocketleague.tracker.network/rocket-league/profile/steam/<name>/overview
-*/
+/* Build RLTracker URL (or steam/<name>) */
 function buildTrackerURL(raw){
   const s = raw.trim();
   if (!s) return null;
@@ -132,13 +135,7 @@ function buildTrackerURL(raw){
   return `https://rocketleague.tracker.network/rocket-league/profile/steam/${encodeURIComponent(s)}/overview`;
 }
 
-/* Parse Ranked Doubles 2v2 specifically.
-   Strategy:
-   1) Cut a short window starting at "Ranked Doubles 2v2".
-   2) Within that window, look for "MMR <number>" first.
-   3) Fallback: first 3–4 digit number AFTER the "Ranked Doubles 2v2" header.
-   4) Win% parsed from same window if present.
-*/
+/* Pull Ranked Doubles 2v2 MMR AND Win% from page */
 async function pullFromRLTracker(url){
   const proxied = "https://r.jina.ai/http://" + url.replace(/^https?:\/\//,"");
   const res = await fetch(proxied, {mode:"cors"});
@@ -148,14 +145,12 @@ async function pullFromRLTracker(url){
   const anchor = /Ranked\s*Doubles\s*2v2/i.exec(text);
   if(!anchor) throw new Error("Couldn't find Ranked Doubles 2v2 on the page.");
   const start = Math.max(0, anchor.index);
-  const windowText = text.slice(start, start + 1800); // tight window to avoid Casual sections
+  const windowText = text.slice(start, start + 2000);
 
   // Prefer explicit "MMR ####"
   let mmr = null;
   const mmrLabel = /MMR[^0-9]{0,6}(\d{3,4})/i.exec(windowText);
   if (mmrLabel) mmr = parseInt(mmrLabel[1], 10);
-
-  // Fallback: first 3–4 digit number after header (avoid picking player counts/IDs by staying in small window)
   if (mmr === null) {
     const num = /\b(\d{3,4})\b/.exec(windowText);
     if (num) mmr = parseInt(num[1], 10);
@@ -175,24 +170,32 @@ function simulateSeries(start, winPct, games, regressPercent){
   let mmr = start;
   let wr = Math.max(0, Math.min(1, winPct/100));
   const arr = [Math.round(mmr)];
+  const wrSeries = [+(wr*100).toFixed(1)];
   for(let i=0;i<games;i++){
     const diff = wr - 0.5;
     wr = 0.5 + diff*(1-DECAY);
     mmr += wr*BASE_WIN - (1-wr)*BASE_LOSS;
     arr.push(Math.round(mmr));
+    wrSeries.push(+(wr*100).toFixed(1));
   }
-  return arr;
+  return { mmrSeries: arr, wrSeries };
 }
 
+/* Aggressive chart: y-range = [series min, series max] with tiny pad, not global */
 function drawSeries(series){
   while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const W = 800, H = 260, P = 28;
+  const W = 800, H = 320, P = 28;
   const gx0 = P, gx1 = W - P, gy0 = P, gy1 = H - P;
 
-  const xScale = (i)=> gx0 + (i/(series.length-1))*(gx1-gx0);
-  const minY = Math.min(...series, GLOBAL_MIN);
-  const maxY = Math.max(...series, GLOBAL_MAX);
-  const yScale = (v)=> gy1 - ((v - minY)/(maxY - minY || 1))*(gy1-gy0);
+  const minY = Math.min(...series);
+  const maxY = Math.max(...series);
+  const span = Math.max(6, maxY - minY);             // prevent zero span
+  const pad = Math.ceil(span * 0.10) || 3;           // ~10% pad
+  const yMin = minY - pad;
+  const yMax = maxY + pad;
+
+  const xScale = i => gx0 + (i/(series.length-1))*(gx1-gx0);
+  const yScale = v => gy1 - ((v - yMin)/(yMax - yMin))*(gy1-gy0);
 
   // grid
   for(let i=0;i<=4;i++){
@@ -218,12 +221,12 @@ function drawSeries(series){
   // markers
   const m0 = document.createElementNS("http://www.w3.org/2000/svg","circle");
   m0.setAttribute("cx", xScale(0)); m0.setAttribute("cy", yScale(series[0]));
-  m0.setAttribute("r", 5); m0.setAttribute("class","currMark");
+  m0.setAttribute("r", 6); m0.setAttribute("class","currMark");
   svg.appendChild(m0);
 
   const m1 = document.createElementNS("http://www.w3.org/2000/svg","circle");
   m1.setAttribute("cx", xScale(series.length-1)); m1.setAttribute("cy", yScale(series.at(-1)));
-  m1.setAttribute("r", 6); m1.setAttribute("class","projMark");
+  m1.setAttribute("r", 7); m1.setAttribute("class","projMark");
   svg.appendChild(m1);
 
   x0.textContent = 0;
@@ -237,48 +240,56 @@ elReg.addEventListener("input", ()=>{
   elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
 });
 
-async function fetchAndFill(){
-  const built = buildTrackerURL(elInput.value || "");
-  if(!built) return alert("Enter a full RLTracker URL or a Steam name.");
+function setStatus(msg, ok=false){
+  elStatus.textContent = msg;
+  elStatus.classList.remove("hide","ok","warn");
+  elStatus.classList.add(ok ? "ok" : "warn","status");
+}
+
+function clearStatus(){ elStatus.classList.add("hide"); }
+
+elFetch.addEventListener("click", async ()=>{
+  clearStatus();
+  const built = buildTrackerURL(elTracker.value || "");
+  if(!built){ setStatus("Enter a full RLTracker URL or a Steam name.", false); return; }
   elFetch.disabled = true; elFetch.textContent = "Fetching…";
   try{
     const { mmr, winPct } = await pullFromRLTracker(built);
     elMMR.value = String(mmr);
     if (winPct!=null) elWin.value = String(winPct);
+    setStatus("Fetched Ranked 2v2 MMR and Win% successfully.", true);
   }catch(err){
-    alert(err.message || "Fetch failed");
+    setStatus(err.message || "Fetch failed.", false);
   }finally{
-    elFetch.disabled = false; elFetch.textContent = "Fetch";
+    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
   }
-}
+});
 
-elFetch.addEventListener("click", fetchAndFill);
-
-elForm.addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  if(!elMMR.value && (elInput.value||"").trim()){
-    try{ await fetchAndFill(); }catch{}
-  }
+document.getElementById("btnPredict").addEventListener("click", ()=>{
+  clearStatus();
 
   const name = elName.value.trim();
-  const mmrNow = Number(elMMR.value || NaN);
-  const winPct = Number(elWin.value || 0);
+  const mmrNow = Number(elMMR.value);
+  const winPct = Number(elWin.value);
   const games = Number(elGames.value || 25);
-  const reg = Number(elReg.value || 20);
-  if (Number.isNaN(mmrNow)) { alert("Enter current 2v2 MMR or use Fetch."); return; }
+  const reg = Number(elReg.value || 30);
+
+  if (Number.isNaN(mmrNow)) { setStatus("Missing current 2v2 MMR. Fetch or type it in backup.", false); return; }
+  if (Number.isNaN(winPct)) { setStatus("Missing recent Win%. Fetch or type it in backup.", false); return; }
 
   const currB = bucket(mmrNow);
   currRank.textContent = labelRank(currB);
   currMMR.textContent = mmrNow;
+  currWR.textContent = winPct.toFixed(0);
 
-  const series = simulateSeries(mmrNow, winPct, games, reg);
-  const finalMMR = series.at(-1);
+  const { mmrSeries, wrSeries } = simulateSeries(mmrNow, winPct, games, reg);
+  const finalMMR = mmrSeries.at(-1);
   const projB = bucket(finalMMR);
   projRank.textContent = labelRank(projB);
   projMMR.textContent = finalMMR;
+  projWR.textContent = wrSeries.at(-1).toFixed(0);
 
-  drawSeries(series);
+  drawSeries(mmrSeries);
   title.textContent = name ? `${name} — 2v2 Doubles` : `2v2 Doubles`;
   out.classList.remove("hide");
 });
