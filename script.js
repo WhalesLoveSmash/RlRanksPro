@@ -1,7 +1,7 @@
-// ====== 2v2 (Ranked Doubles) — live division ranges from your screenshots ======
+/***** 2v2 (Ranked Doubles) division ranges from screenshot *****/
 const RANKS_2V2 = [
-  // [Rank, Division, lo, hi]
-  ["Supersonic Legend", "—", 1861, 2105], // SSL shown with one bucket
+  // [Tier, Division, lo, hi]
+  ["Supersonic Legend", "—", 1861, 2105],
 
   ["Grand Champion III", "Div I", 1715, 1736],
   ["Grand Champion III", "Div II", 1745, 1775],
@@ -109,114 +109,223 @@ const RANKS_2V2 = [
   ["Bronze I", "Div IV", 157, 173],
 ];
 
-// Typical per-result change (tune if you want)
+/***** Config *****/
 const BASE_MMR_PER_WIN = 10;
 const BASE_MMR_PER_LOSS = 10;
 
-// ====== DOM ======
+const GLOBAL_MIN = RANKS_2V2[RANKS_2V2.length - 1][2];
+const GLOBAL_MAX = RANKS_2V2[0][3];
+const TOTAL_SPAN = GLOBAL_MAX - GLOBAL_MIN;
+
+/***** DOM *****/
 const form = document.getElementById("player-form");
 const playerInput = document.getElementById("player");
+const mmrInput = document.getElementById("currentMMR");
 const winrateInput = document.getElementById("winrate");
 const gamesInput = document.getElementById("games");
+const regressInput = document.getElementById("regress");
+const regressVal = document.getElementById("regressVal");
+const fetchWRBtn = document.getElementById("fetchWR");
+const trackerUrlInput = document.getElementById("trackerUrl");
 
 const results = document.getElementById("results");
 const playerLabel = document.getElementById("playerLabel");
 const mmrOut = document.getElementById("mmr");
-const rankOut = document.getElementById("rank");
-const rankbar = document.getElementById("rankbar");
+const rankOut = document.getElementById("currRankText");
 const projGamesOut = document.getElementById("projGames");
 const projMMROut = document.getElementById("projMMR");
+const projMMROut2 = document.getElementById("projMMR2");
 const projRankOut = document.getElementById("projRank");
+const rankbar = document.getElementById("rankbar");
+const tierLabels = document.getElementById("tierLabels");
+const badgeCurrent = document.getElementById("badgeCurrent");
+const badgeProjected = document.getElementById("badgeProjected");
 
-// ====== Helpers ======
-const GLOBAL_MIN = RANKS_2V2[RANKS_2V2.length - 1][2]; // lowest lo
-const GLOBAL_MAX = RANKS_2V2[0][3];                      // highest hi
-const TOTAL_SPAN = GLOBAL_MAX - GLOBAL_MIN;
-
-function findRank2v2(mmr) {
-  for (const [rank, div, lo, hi] of RANKS_2V2) {
-    if (mmr >= lo && mmr <= hi) return { rank, div, lo, hi };
+/***** Helpers *****/
+function findBucket(mmr) {
+  for (const [tier, div, lo, hi] of RANKS_2V2) {
+    if (mmr >= lo && mmr <= hi) return { tier, div, lo, hi };
   }
-  // below/above tables
-  if (mmr < GLOBAL_MIN) return { rank: "Below Bronze I", div: "—", lo: GLOBAL_MIN, hi: GLOBAL_MIN };
-  return { rank: "Above SSL", div: "—", lo: GLOBAL_MAX, hi: GLOBAL_MAX };
+  if (mmr < GLOBAL_MIN) return { tier: "Below Bronze I", div: "—", lo: GLOBAL_MIN, hi: GLOBAL_MIN };
+  return { tier: "Above SSL", div: "—", lo: GLOBAL_MAX, hi: GLOBAL_MAX };
+}
+function tierNameOf(t){ return (t || "").split(" ")[0]; }
+
+function buildTierRanges(){
+  const map = new Map();
+  for (const [tier, div, lo, hi] of RANKS_2V2){
+    const major = tierNameOf(tier);
+    if(!map.has(major)) map.set(major, { name: major, lo, hi });
+    const obj = map.get(major);
+    obj.lo = Math.min(obj.lo, lo);
+    obj.hi = Math.max(obj.hi, hi);
+  }
+  return Array.from(map.values()).sort((a,b)=>a.lo-b.lo);
 }
 
-function renderRankBar2v2(mmr) {
-  rankbar.innerHTML = "";
-
-  // Build segments for every division bucket
-  RANKS_2V2.slice().reverse().forEach(([rank, div, lo, hi], i, arr) => {
-    const seg = document.createElement("div");
-    seg.className = "rank-seg";
-    seg.style.width = ((hi - lo + 1) / TOTAL_SPAN) * 100 + "%";
-    seg.title = `${rank} ${div !== "—" ? "(" + div + ")" : ""} ${lo}–${hi}`;
-    rankbar.appendChild(seg);
-  });
-
-  // Pin + label
-  const percent = ((mmr - GLOBAL_MIN) / TOTAL_SPAN) * 100;
-  const pin = document.createElement("div");
-  pin.className = "pin";
-  pin.style.left = percent + "%";
-
-  const pinLabel = document.createElement("div");
-  pinLabel.className = "pin-label";
-  pinLabel.style.left = percent + "%";
-  pinLabel.textContent = mmr;
-
-  rankbar.appendChild(pin);
-  rankbar.appendChild(pinLabel);
-}
-
-function projectMMR(current, winratePct, games, mmrWin = BASE_MMR_PER_WIN, mmrLoss = BASE_MMR_PER_LOSS) {
-  // Simple “drift toward 50% WR” model
-  const DECAY_STEP = 0.003;
+function projectMMR(current, winratePct, games, regressionPercent){
+  // Convert regression strength (0..100) to a per-game decay toward 50%.
+  // 0  -> 0   (no regression)
+  // 100-> 0.02 (fast)
+  const DECAY_STEP = (regressionPercent/100) * 0.02;
   let mmr = current;
-  let wr = Math.max(0, Math.min(1, winratePct / 100));
-  for (let i = 0; i < games; i++) {
+  let wr = Math.max(0, Math.min(1, winratePct/100));
+  for (let i=0;i<games;i++){
     const diffFrom50 = wr - 0.5;
     wr = 0.5 + diffFrom50 * (1 - DECAY_STEP);
-    mmr += wr * mmrWin - (1 - wr) * mmrLoss;
+    mmr += wr*BASE_MMR_PER_WIN - (1-wr)*BASE_MMR_PER_LOSS;
   }
   return Math.round(mmr);
 }
 
-// ====== Placeholder fetch (swap later for real data) ======
-async function fetchCurrentMMR(/*player*/) {
-  // For now, ask the user if you want a quick demo:
-  // return Number(prompt("Enter your current 2v2 MMR:", "1065")) || 1065;
+/***** Graph *****/
+function clear(node){ while(node.firstChild) node.removeChild(node.firstChild); }
 
-  // If you prefer silent demo, set a default:
-  return 1065; // Diamond III Div IV-ish from the table
+function renderTrack(){
+  clear(rankbar);
+  clear(tierLabels);
+
+  // Division segments (fine-grained)
+  RANKS_2V2.slice().reverse().forEach(([tier, div, lo, hi])=>{
+    const seg = document.createElement("div");
+    seg.className = "rank-seg";
+    seg.style.width = ((hi - lo + 1)/TOTAL_SPAN)*100 + "%";
+    seg.title = `${tier}${div!=="—" ? " ("+div+")": ""} ${lo}–${hi}`;
+    rankbar.appendChild(seg);
+  });
+
+  // Tier labels (coarse)
+  const tiers = buildTierRanges();
+  tiers.forEach(t=>{
+    const span = document.createElement("div");
+    span.className = "rank-label";
+    span.style.width = ((t.hi - t.lo + 1)/TOTAL_SPAN)*100 + "%";
+    span.textContent = t.name;
+    tierLabels.appendChild(span);
+  });
 }
 
-// ====== Wire Up (lock to 2v2) ======
-form.addEventListener("submit", async (e) => {
+function placePin(value, kind){
+  const percent = ((value - GLOBAL_MIN)/TOTAL_SPAN)*100;
+  const pin = document.createElement("div");
+  const label = document.createElement("div");
+  pin.className = `pin ${kind}`;
+  label.className = `pin-label ${kind}`;
+  pin.style.left = percent + "%";
+  label.style.left = percent + "%";
+  label.textContent = value;
+  rankbar.appendChild(pin);
+  rankbar.appendChild(label);
+}
+
+function colorForTier(tier){
+  const t = tierNameOf(tier);
+  if (t==="Bronze") return "linear-gradient(180deg,#8e5b2a,#5c3b1c)";
+  if (t==="Silver") return "linear-gradient(180deg,#bfc6ce,#7a8a9c)";
+  if (t==="Gold") return "linear-gradient(180deg,#f3d36b,#a88a2a)";
+  if (t==="Platinum") return "linear-gradient(180deg,#6de0ff,#1b6b83)";
+  if (t==="Diamond") return "linear-gradient(180deg,#69aaff,#2056a8)";
+  if (t==="Champion") return "linear-gradient(180deg,#c699ff,#6c3ad6)";
+  if (t==="Grand") return "linear-gradient(180deg,#ff78b8,#9a1f66)";
+  if (t==="Supersonic") return "linear-gradient(180deg,#ffffff,#b9c3ff)";
+  return "linear-gradient(180deg,#465366,#1e2736)";
+}
+
+function setBadge(el, bucket, mmrVal){
+  el.style.background = `linear-gradient(180deg,#0f1625,#0e1522)`;
+  el.style.borderImage = "initial";
+  el.querySelector(".badge-rank").textContent =
+    `${bucket.tier}${bucket.div!=="—" ? " "+bucket.div:""} (${bucket.lo}–${bucket.hi})`;
+  el.querySelector(".badge-mmr span")?.remove;
+  const mmrSpan = el.querySelector(".badge-mmr span") || el.querySelector(".badge-mmr");
+  if (mmrSpan.id !== "mmr" && mmrSpan.id !== "projMMR"){
+    // do nothing, ids already wired in DOM
+  }
+  el.style.border = "1px solid #2d3d58";
+  el.style.boxShadow = "inset 0 0 0 9999px rgba(0,0,0,0)";
+
+  // Accent strip
+  el.style.setProperty("--accentStrip", colorForTier(bucket.tier));
+  el.style.background = `linear-gradient(180deg,#0f1625,#0e1522), ${colorForTier(bucket.tier)}`;
+  el.style.backgroundBlendMode = "normal, multiply";
+}
+
+/***** RLTracker Win Rate (optional, demo via read-only proxy) *****
+  - Paste full RLTracker profile URL in the input.
+  - We fetch text using r.jina.ai proxy (CORS-friendly read-only).
+  - We look for "Win %" followed by a number.
+*******************************************************************/
+async function fetchWinRateFromRLTracker(url){
+  if(!/^https?:\/\/.*?tracker\.network/i.test(url)) throw new Error("Paste a valid RLTracker profile URL.");
+  const proxied = "https://r.jina.ai/http://" + url.replace(/^https?:\/\//,"");
+  const res = await fetch(proxied, {mode:"cors"});
+  if(!res.ok) throw new Error("Fetch failed.");
+  const text = await res.text();
+
+  // Try to find "Win %" like 'Win % 58' or 'Win % 58.3'
+  const m = text.match(/Win\s*%[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i);
+  if(!m) throw new Error("Could not find Win % on page.");
+  const val = Math.max(0, Math.min(100, parseFloat(m[1])));
+  return Math.round(val);
+}
+
+/***** UI Events *****/
+regressInput.addEventListener("input", () => {
+  const v = Number(regressInput.value);
+  let tag = "gentle";
+  if (v >= 60) tag = "harsh";
+  else if (v >= 25) tag = "medium";
+  regressVal.textContent = `${v}% (${tag})`;
+});
+
+fetchWRBtn.addEventListener("click", async () => {
+  const url = trackerUrlInput.value.trim();
+  if (!url) return alert("Paste your RLTracker profile URL first.");
+  fetchWRBtn.disabled = true; fetchWRBtn.textContent = "Fetching…";
+  try{
+    const wr = await fetchWinRateFromRLTracker(url);
+    winrateInput.value = String(wr);
+  }catch(err){
+    alert("Fetch failed: " + (err?.message || err));
+  }finally{
+    fetchWRBtn.disabled = false; fetchWRBtn.textContent = "Fetch WR";
+  }
+});
+
+form.addEventListener("submit", (e)=>{
   e.preventDefault();
 
-  const player = playerInput.value.trim();
-  const winratePct = Number(winrateInput.value || 0);
-  const games = Number(gamesInput.value || 0);
-  if (!player || !games) return;
+  const player = (playerInput.value || "Player").trim();
+  const currentMMR = Number(mmrInput.value || 1065);
+  const winratePct = Number(winrateInput.value || 50);
+  const games = Number(gamesInput.value || 25);
+  const regression = Number(regressInput.value || 15);
 
-  playerLabel.textContent = `${player} — 2v2 Doubles`;
   results.classList.remove("hidden");
+  playerLabel.textContent = `${player} — 2v2 Doubles`;
 
-  // 1) Current MMR
-  const currentMMR = await fetchCurrentMMR(player);
+  // Current
+  const curr = findBucket(currentMMR);
   mmrOut.textContent = currentMMR;
+  rankOut.textContent = `${curr.tier}${curr.div!=="—" ? " "+curr.div:""} (${curr.lo}–${curr.hi})`;
+  setBadge(badgeCurrent, curr, currentMMR);
 
-  // 2) Current rank + bar
-  const curr = findRank2v2(currentMMR);
-  rankOut.textContent = `${curr.rank}${curr.div !== "—" ? " " + curr.div : ""} (${curr.lo}–${curr.hi})`;
-  renderRankBar2v2(currentMMR);
-
-  // 3) Projection
-  const projected = projectMMR(currentMMR, winratePct, games);
+  // Projection
+  const projected = projectMMR(currentMMR, winratePct, games, regression);
   projGamesOut.textContent = games;
   projMMROut.textContent = projected;
+  projMMROut2.textContent = projected;
 
-  const proj = findRank2v2(projected);
-  projRankOut.textContent = `${proj.rank}${proj.div !== "—" ? " " + proj.div : ""} (${proj.lo}–${proj.hi})`;
+  const proj = findBucket(projected);
+  projRankOut.textContent = `${proj.tier}${proj.div!=="—" ? " "+proj.div:""} (${proj.lo}–${proj.hi})`;
+  document.getElementById("projRankText").textContent = projRankOut.textContent;
+  setBadge(badgeProjected, proj, projected);
+
+  // Track
+  renderTrack();
+  placePin(currentMMR, "curr");
+  placePin(projected, "proj");
 });
+
+// First render
+renderTrack();
