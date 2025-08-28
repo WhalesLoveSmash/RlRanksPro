@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>RL Ranks Pro</title>
+  <title>2v2 Rank Predictor — RL Ranks Pro</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -16,12 +16,25 @@
     <!-- STEP 1: FETCH FIRST -->
     <section class="card">
       <h2 class="step">Step 1 · Fetch from RLTracker</h2>
+
       <div class="fetch-grid">
         <label class="full">
-          RLTracker URL <span class="alt">or just your Steam name</span>
-          <input id="trackerInput" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/WhalesLoveSmash/overview  •  or  •  WhalesLoveSmash" />
-          <small>If only a name is entered, it uses <code>/profile/steam/&lt;name&gt;/overview</code>.</small>
+          RLTracker URL <span class="alt">or enter your ID/name</span>
+          <input id="trackerInput" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/7656119.../overview  •  or  •  your name/ID" />
+          <small>If you enter only a name/ID, we’ll build a profile URL using the selected platform (default Steam).</small>
         </label>
+
+        <label>
+          Platform
+          <select id="platform">
+            <option value="steam" selected>Steam</option>
+            <option value="epic">Epic</option>
+            <option value="xbl">Xbox</option>
+            <option value="psn">PlayStation</option>
+            <option value="switch">Nintendo</option>
+          </select>
+        </label>
+
         <button id="btnFetch" class="primary">Fetch Ranked 2v2</button>
       </div>
 
@@ -63,7 +76,7 @@
             <input id="regress" type="range" min="0" max="100" value="30" />
             <span id="regressTag" class="tag">30% • medium</span>
           </div>
-          <small>0% = never regresses (optimistic). 100% = snaps toward 50% very quickly (harsh).</small>
+          <small>0% = never regresses (optimistic). 100% = snaps toward 50% quickly (harsh).</small>
         </label>
       </div>
 
@@ -103,10 +116,10 @@
     </section>
 
     <footer class="foot">
-      <small>“Fetch” targets the <strong>Ranked Doubles 2v2</strong> block. Manual fields are a fallback.</small>
+      <small>Fetch targets the <strong>Ranked Doubles 2v2</strong> block. Manual fields are a fallback.</small>
     </footer>
   </main>
   <script src="script.js"></script>
-  <script src="monetize.js"></script>
+  <script src="monetize.js" defer></script>
 </body>
 </html>
