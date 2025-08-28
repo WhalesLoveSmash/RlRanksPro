@@ -17,13 +17,14 @@
       <div class="grid">
         <label>
           Display name (optional)
-          <input id="name" placeholder="e.g., player123" />
+          <input id="name" placeholder="player" />
+          <small>Shown in the header only.</small>
         </label>
 
         <label>
-          RLTracker profile URL
-          <input id="trackerUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/YourName/overview" />
-          <small>Used to auto-pull your current 2v2 MMR and recent Win%.</small>
+          RLTracker URL or Steam name
+          <input id="trackerInput" placeholder="Paste full URL or just Steam name (e.g., WhalesLoveSmash)" />
+          <small>If you enter only a name, it uses <code>/profile/steam/&lt;name&gt;/overview</code>.</small>
         </label>
 
         <label>
@@ -32,6 +33,7 @@
             <input id="mmr" type="number" min="-100" max="4000" placeholder="auto from RLTracker" />
             <button type="button" id="btnFetch" class="ghost">Fetch</button>
           </div>
+          <small>Fetch tries to read your Ranked Doubles 2v2 MMR and recent Win%.</small>
         </label>
 
         <label>
@@ -78,9 +80,7 @@
       </div>
 
       <div class="chart">
-        <svg id="svg" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Projected MMR over games">
-          <!-- grid, line, and markers injected by JS -->
-        </svg>
+        <svg id="svg" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
         <div class="axis">
           <span id="x0">0</span>
           <span id="xMid">—</span>
@@ -90,7 +90,7 @@
     </section>
 
     <footer class="foot">
-      <small>2v2 thresholds are embedded. “Fetch” reads your RLTracker page via a read-only proxy to find current MMR and recent Win%.</small>
+      <small>2v2 thresholds are embedded. “Fetch” reads RLTracker via a read-only proxy and targets the Ranked Doubles 2v2 MMR block.</small>
     </footer>
   </main>
   <script src="script.js"></script>
