@@ -1,4 +1,4 @@
-/********** 2v2 division ranges (unchanged) **********/
+/********** 2v2 division ranges **********/
 const R2 = [
   ["Supersonic Legend","—",1861,2105],
   ["Grand Champion III","Div I",1715,1736],
@@ -104,7 +104,6 @@ const elName = document.getElementById("name");
 const elGames = document.getElementById("games");
 const elReg = document.getElementById("regress");
 const elRegTag = document.getElementById("regressTag");
-const elPredict = document.getElementById("btnPredict");
 
 const out = document.getElementById("out");
 const title = document.getElementById("title");
@@ -128,10 +127,10 @@ function bucket(m){
 }
 function labelRank(b){ return `${b.t}${b.d!=="—" ? " "+b.d:""} (${b.lo}–${b.hi})`; }
 
-/* Build RLTracker URL:
-   - If input starts with http(s), use as-is.
-   - Else treat as identifier on selected platform.
-   - Steam: accepts vanity names or 64-bit SteamID.
+/* Build RLTracker URL from input.
+   - If they paste an URL → use as-is.
+   - Else treat as identifier on selected platform (default steam).
+   - Accept 64-bit SteamID or vanity.
 */
 function buildTrackerURL(raw, platform){
   const s = (raw || "").trim();
@@ -139,52 +138,74 @@ function buildTrackerURL(raw, platform){
   if (/^https?:\/\//i.test(s)) return s;
 
   const plat = (platform || "steam").toLowerCase();
-  // RLTracker path component for platforms
   const map = { steam: "steam", epic: "epic", xbl: "xbl", psn: "psn", switch: "switch" };
   const p = map[plat] || "steam";
 
+  // RLTracker expects exact casing; let’s not force lower/upper on the ID.
   return `https://rocketleague.tracker.network/rocket-league/profile/${p}/${encodeURIComponent(s)}/overview`;
+}
+
+/* Fetch text with a few URL variants to survive small differences (trailing slash, missing /overview) */
+async function fetchProfileText(url){
+  const variants = Array.from(new Set([
+    url,
+    url.endsWith("/overview") ? url : (url.replace(/\/$/, "") + "/overview"),
+    url.replace(/\/overview\/?$/,""), // root profile URL
+  ]));
+
+  let lastErr = null;
+  for (const u of variants){
+    try{
+      const proxied = "https://r.jina.ai/http://" + u.replace(/^https?:\/\//,"");
+      const res = await fetch(proxied, {mode:"cors"});
+      if (!res.ok) { lastErr = new Error(`Fetch failed (${res.status})`); continue; }
+      const text = await res.text();
+      if (text && text.length > 2000) return text; // crude sanity check
+      lastErr = new Error("Empty response");
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("Fetch failed");
 }
 
 /* Robustly pull Ranked Doubles 2v2 MMR + Win% */
 async function pullFromRLTracker(url){
-  // Use read-only text proxy (handles CORS & JS-protected pages)
-  const proxied = "https://r.jina.ai/http://" + url.replace(/^https?:\/\//,"");
-  const res = await fetch(proxied, {mode:"cors"});
-  if(!res.ok) throw new Error("Fetch failed");
-  const text = await res.text();
+  const text = await fetchProfileText(url);
 
-  // Narrow to Ranked Doubles 2v2 section
-  const anchor = /Ranked\s*Doubles\s*2v2/i.exec(text);
+  // Look for several common ways TRN labels the 2v2 playlist
+  const anchor =
+    /Ranked\s*Doubles\s*2v2/i.exec(text) ||
+    /Doubles\s*\(?2v2\)?/i.exec(text) ||
+    /Ranked\s*2v2/i.exec(text);
+
   if(!anchor) throw new Error("Couldn't find Ranked Doubles 2v2 on profile.");
-  const start = Math.max(0, anchor.index);
-  const windowText = text.slice(start, start + 4000);
 
-  // 1) MMR: look for explicit "MMR ####"
+  // Narrow window after the first match
+  const start = Math.max(0, anchor.index);
+  const windowText = text.slice(start, start + 5000); // allow a slightly bigger window
+
+  // MMR: prefer explicit "MMR ####"
   let mmr = null;
   const mmrLabel = /MMR[^0-9]{0,8}(\d{3,4})/i.exec(windowText);
   if (mmrLabel) mmr = parseInt(mmrLabel[1], 10);
 
-  // 1b) Fallback: common alt patterns in TRN markup near 2v2
+  // Fallbacks around common text patterns
   if (mmr === null) {
-    const alt = /(?:Rating|Skill\s*Rating|MMR)\D{0,8}(\d{3,4})/i.exec(windowText) ||
-                /\b(\d{3,4})\b(?=[^A-Za-z]{0,12}(?:MMR|rating))/i.exec(windowText);
+    const alt =
+      /(?:Rating|Skill\s*Rating)\D{0,8}(\d{3,4})/i.exec(windowText) ||
+      /\b(\d{3,4})\b(?=[^A-Za-z]{0,12}(?:MMR|rating))/i.exec(windowText);
     if (alt) mmr = parseInt(alt[1], 10);
   }
-
-  if (mmr == null) {
-    // very last fallback: first 3–4 digit number within first ~800 chars of the block
+  if (mmr === null) {
     const loose = /\b(\d{3,4})\b/.exec(windowText.slice(0, 800));
     if (loose) mmr = parseInt(loose[1], 10);
   }
   if (mmr == null) throw new Error("Couldn't locate 2v2 MMR.");
 
-  // 2) Win % direct
+  // Win %
   let winPct = null;
   const wrm = /Win\s*%[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i.exec(windowText);
   if (wrm) winPct = Math.max(0, Math.min(100, parseFloat(wrm[1])));
 
-  // 2b) If no Win %, compute from Wins/Losses if present
   if (winPct == null) {
     const w = /Wins[^0-9]{0,6}(\d{1,4})/i.exec(windowText);
     const l = /Losses[^0-9]{0,6}(\d{1,4})/i.exec(windowText);
@@ -198,7 +219,7 @@ async function pullFromRLTracker(url){
 }
 
 function simulateSeries(start, winPct, games, regressPercent){
-  const DECAY = (regressPercent/100)*0.02; // 0..0.02 per game
+  const DECAY = (regressPercent/100)*0.02;
   let mmr = start;
   let wr = Math.max(0, Math.min(1, winPct/100));
   const arr = [Math.round(mmr)];
@@ -213,7 +234,6 @@ function simulateSeries(start, winPct, games, regressPercent){
   return { mmrSeries: arr, wrSeries };
 }
 
-/* Aggressive chart scaling */
 function drawSeries(series){
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   const W = 800, H = 320, P = 28;
@@ -264,11 +284,6 @@ function drawSeries(series){
 }
 
 /********** UI **********/
-elReg.addEventListener("input", ()=>{
-  const v = Number(elReg.value);
-  elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
-});
-
 function setStatus(msg, ok=false){
   elStatus.textContent = msg;
   elStatus.classList.remove("hide","ok","warn");
@@ -276,9 +291,14 @@ function setStatus(msg, ok=false){
 }
 function clearStatus(){ elStatus.classList.add("hide"); }
 
+elReg.addEventListener("input", ()=>{
+  const v = Number(elReg.value);
+  elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
+});
+
 async function fetchAndFill(){
   clearStatus();
-  const built = buildTrackerURL(elTracker.value, elPlatform.value);
+  const built = buildTrackerURL(elTracker.value, elPlatform ? elPlatform.value : "steam");
   if(!built){ setStatus("Enter a full RLTracker URL or a name/ID.", false); return; }
   elFetch.disabled = true; elFetch.textContent = "Fetching…";
   try{
@@ -287,7 +307,12 @@ async function fetchAndFill(){
     if (winPct!=null) elWin.value = String(winPct);
     setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
   }catch(err){
-    setStatus(err.message || "Fetch failed.", false);
+    // Nice hint for the common typo case
+    const id = (elTracker.value || "").trim();
+    const tip = /^\d{17}$/.test(id)
+      ? " (SteamID64 looks fine; double-check the profile is public)"
+      : " (TIP: paste your full RLTracker URL or your 17-digit SteamID64 for a guaranteed match)";
+    setStatus((err.message || "Fetch failed.") + tip, false);
   }finally{
     elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
   }
@@ -298,12 +323,11 @@ elFetch.addEventListener("click", fetchAndFill);
 document.getElementById("btnPredict").addEventListener("click", async ()=>{
   clearStatus();
 
-  // If user only entered ID/name and didn’t click Fetch, try once here:
   if (!elMMR.value && elTracker.value.trim()){
     try{ await fetchAndFill(); }catch{}
   }
 
-  const name = elName.value.trim();
+  const name = (elName && elName.value || "").trim();
   const mmrNow = Number(elMMR.value);
   const winPct = Number(elWin.value);
   const games = Number(elGames.value || 25);
