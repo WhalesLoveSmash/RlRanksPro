@@ -1,0 +1,23 @@
+body {
+  font-family: sans-serif;
+  background: #f5f5f5;
+  text-align: center;
+  margin-top: 50px;
+}
+
+h1 {
+  color: darkblue;
+}
+
+button {
+  padding: 10px 20px;
+  background: darkblue;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: navy;
+}
