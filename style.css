@@ -1,23 +1,76 @@
+:root {
+  --bg: #0b0f14;
+  --card: #121822;
+  --text: #e9eef5;
+  --muted: #9bb0c9;
+  --accent: #4da3ff;
+  --good: #66d17a;
+  --chip: #213047;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
 body {
-  font-family: sans-serif;
-  background: #f5f5f5;
-  text-align: center;
-  margin-top: 50px;
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 20% -10%, #162033, transparent), var(--bg);
+  color: var(--text);
 }
 
-h1 {
-  color: darkblue;
+.container {
+  max-width: 780px; margin: 40px auto; padding: 0 16px;
 }
 
+h1 { margin: 0 0 16px; font-weight: 700; letter-spacing: 0.2px; }
+h2 { margin: 0 0 8px; }
+
+form {
+  display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px,1fr));
+  background: var(--card); padding: 16px; border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  margin-bottom: 18px;
+}
+
+label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+input, select, button {
+  border: 1px solid #2d3d58; background: #0f1520; color: var(--text);
+  padding: 10px 12px; border-radius: 10px; font-size: 15px; outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
 button {
-  padding: 10px 20px;
-  background: darkblue;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
+  cursor: pointer; font-weight: 600; background: linear-gradient(180deg,#2a6bd8,#204ea1);
+  border-color: transparent;
+}
+button:hover { filter: brightness(1.05); }
+
+.card {
+  background: var(--card); padding: 16px; border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
 
-button:hover {
-  background: navy;
+.hidden { display: none; }
+
+.rankbar {
+  position: relative;
+  margin: 16px 0 8px;
+  background: #0e1522; border: 1px solid #2d3d58; border-radius: 999px;
+  height: 22px; overflow: hidden;
+  display: grid; grid-auto-flow: column;
 }
+
+.rank-seg {
+  height: 100%;
+  border-right: 1px solid #2d3d58;
+  background: linear-gradient(180deg, #18253a, #141c2b);
+}
+.rank-seg:last-child { border-right: none; }
+
+.rank-labels {
+  display: grid; grid-auto-flow: column; gap: 4px; margin-top: 6px; font-size: 12px; color: var(--muted);
+}
+
+.pin {
+  position: absolute; top: -6px; width: 0; height: 0; 
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid var(--accent);
+  transform: translateX(-50%);
+}
+.pin-label {
+  position: absolute; top: -24px; transform: translateX(-50%); font-size: 12px; color: var(--accent);
+  background: var(--chip); padding: 2px 6px; border-radius: 999px; border: 1px solid

@@ -1,15 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RlRankPro</title>
-
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RL Ranks — Predictive</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <h1>Input Rl Tracker</h1>
-  <button id="btn">Click Me</button>
+  <main class="container">
+    <h1>Rocket League Rank Predictor</h1>
+
+    <form id="player-form">
+      <label>
+        RL Tracker Name (e.g. Platform/ID):
+        <input id="player" placeholder="steam/76561198000000000" required />
+      </label>
+
+      <label>
+        Playlist:
+        <select id="playlist">
+          <option value="3v3" selected>Ranked Standard 3v3</option>
+          <option value="2v2">Ranked Doubles 2v2</option>
+          <option value="1v1">Ranked Duel 1v1</option>
+        </select>
+      </label>
+
+      <label>
+        Recent Win Rate (%):
+        <input id="winrate" type="number" min="0" max="100" step="1" value="60" />
+      </label>
+
+      <label>
+        Games to Project:
+        <input id="games" type="number" min="1" max="200" value="25" />
+      </label>
+
+      <button type="submit">Fetch & Predict</button>
+    </form>
+
+    <section id="results" class="card hidden">
+      <h2 id="playerLabel"></h2>
+      <p><strong>Current MMR:</strong> <span id="mmr">—</span></p>
+      <p><strong>Current Rank:</strong> <span id="rank">—</span></p>
+
+      <div class="rankbar" id="rankbar"></div>
+
+      <div class="projection">
+        <p><strong>Projected MMR after <span id="projGames">0</span> games:</strong> <span id="projMMR">—</span></p>
+        <p><strong>Projected Rank:</strong> <span id="projRank">—</span></p>
+      </div>
+    </section>
+
+    <footer>
+      <small>
+        Notes: MMR per win/loss is assumed ~8–12 on average; you can tune this in <code>script.js</code>. 
+        Rank thresholds vary by mode/season; edit the config block at the top of <code>script.js</code>. 
+      </small>
+    </footer>
+  </main>
 
   <script src="script.js"></script>
 </body>
