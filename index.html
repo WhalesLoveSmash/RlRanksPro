@@ -7,46 +7,49 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="container">
-    <header>
-      <h1>RL Ranks Pro — 2v2 Predictor</h1>
-      <p class="subtitle">Enter your details, then see your current & projected rank on a visual track.</p>
+  <main class="wrap">
+    <header class="top">
+      <h1>2v2 Rank Predictor</h1>
+      <p class="sub">Current MMR + projected path over the next N games.</p>
     </header>
 
-    <form id="player-form" class="card">
+    <form id="form" class="card">
       <div class="grid">
         <label>
-          RL Name (for display)
-          <input id="player" placeholder="WhalesLoveSmash" />
+          Display name (optional)
+          <input id="name" placeholder="e.g., player123" />
+        </label>
+
+        <label>
+          RLTracker profile URL
+          <input id="trackerUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/YourName/overview" />
+          <small>Used to auto-pull your current 2v2 MMR and recent Win%.</small>
         </label>
 
         <label>
           Current 2v2 MMR
-          <input id="currentMMR" type="number" step="1" placeholder="1065" />
-        </label>
-
-        <label>
-          Recent Win Rate (%)
           <div class="row">
-            <input id="winrate" type="number" min="0" max="100" step="1" value="60" />
-            <button type="button" id="fetchWR" class="ghost">Fetch WR</button>
+            <input id="mmr" type="number" min="-100" max="4000" placeholder="auto from RLTracker" />
+            <button type="button" id="btnFetch" class="ghost">Fetch</button>
           </div>
-          <small>Optional: paste your RLTracker profile URL below and press <em>Fetch WR</em>.</small>
-          <input id="trackerUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/YourName/overview" />
         </label>
 
         <label>
-          Games to Project
+          Recent Win %
+          <input id="win" type="number" min="0" max="100" value="60" />
+        </label>
+
+        <label>
+          Games to project
           <input id="games" type="number" min="1" max="200" value="25" />
         </label>
 
         <label class="full">
-          Win-Rate Regression (toward 50% as you rise)
+          Win% regression toward 50% as you climb
           <div class="row">
-            <input id="regress" type="range" min="0" max="100" value="15" />
-            <span class="chip" id="regressVal">15% (gentle)</span>
+            <input id="regress" type="range" min="0" max="100" value="20" />
+            <span id="regressTag" class="tag">20% • gentle</span>
           </div>
-          <small>0% = never regresses (optimistic). 100% = snaps to 50% immediately (harsh).</small>
         </label>
       </div>
 
@@ -55,45 +58,41 @@
       </div>
     </form>
 
-    <section id="results" class="card hidden">
-      <div class="result-head">
-        <h2 id="playerLabel">Player — 2v2 Doubles</h2>
+    <section id="out" class="card hide">
+      <div class="head">
+        <h2 id="title">2v2 Doubles</h2>
+        <div class="pill">Only 2v2</div>
       </div>
 
-      <div class="badges">
-        <div class="badge" id="badgeCurrent">
-          <div class="badge-title">Current</div>
-          <div class="badge-rank" id="currRankText">—</div>
-          <div class="badge-mmr"><span id="mmr">—</span> MMR</div>
+      <div class="stats">
+        <div class="badge">
+          <div class="k">Current</div>
+          <div class="v" id="currRank">—</div>
+          <div class="s"><span id="currMMR">—</span> MMR</div>
         </div>
-        <div class="badge" id="badgeProjected">
-          <div class="badge-title">Projected</div>
-          <div class="badge-rank" id="projRankText">—</div>
-          <div class="badge-mmr"><span id="projMMR">—</span> MMR</div>
+        <div class="badge">
+          <div class="k">Projected</div>
+          <div class="v" id="projRank">—</div>
+          <div class="s"><span id="projMMR">—</span> MMR</div>
         </div>
       </div>
 
-      <div class="track-wrap">
-        <div id="rankbar" class="rankbar"></div>
-        <div class="rank-labels" id="tierLabels"></div>
-
-        <!-- Pins are injected by JS -->
-      </div>
-
-      <div class="projection">
-        <p><strong>Projected MMR after <span id="projGames">0</span> games:</strong> <span id="projMMR2">—</span></p>
-        <p><strong>Projected Rank:</strong> <span id="projRank">—</span></p>
+      <div class="chart">
+        <svg id="svg" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Projected MMR over games">
+          <!-- grid, line, and markers injected by JS -->
+        </svg>
+        <div class="axis">
+          <span id="x0">0</span>
+          <span id="xMid">—</span>
+          <span id="xEnd">—</span>
+        </div>
       </div>
     </section>
 
-    <footer class="footer">
-      <small>
-        Notes: 2v2 division thresholds use the table embedded in <code>script.js</code>. 
-        “Fetch WR” scrapes text via a read-only proxy for demo purposes; paste your RLTracker profile URL.
-      </small>
+    <footer class="foot">
+      <small>2v2 thresholds are embedded. “Fetch” reads your RLTracker page via a read-only proxy to find current MMR and recent Win%.</small>
     </footer>
   </main>
-
   <script src="script.js"></script>
 </body>
 </html>
