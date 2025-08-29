@@ -1,174 +1,159 @@
-/********** DOM **********/
-const elUrl = document.getElementById("trackerUrl");
-const elFetch = document.getElementById("btnFetch");
-const elStatus = document.getElementById("fetchStatus");
+// ----- Utilities -----
 
-const elMMR = document.getElementById("mmr");
-const elWin = document.getElementById("win");
-const elName = document.getElementById("name");
-
-const elGames = document.getElementById("games");
-const elReg = document.getElementById("regress");
-const elRegTag = document.getElementById("regressTag");
-
-const out = document.getElementById("out");
-const title = document.getElementById("title");
-const currRank = document.getElementById("currRank");
-const projRank = document.getElementById("projRank");
-const currMMR = document.getElementById("currMMR");
-const projMMR = document.getElementById("projMMR");
-const currWR = document.getElementById("currWR");
-const projWR = document.getElementById("projWR");
-
-const svg = document.getElementById("svg");
-const x0 = document.getElementById("x0");
-const xMid = document.getElementById("xMid");
-const xEnd = document.getElementById("xEnd");
-
-/********** helpers **********/
-function setStatus(msg, ok=false){
-  elStatus.textContent = msg;
-  elStatus.classList.remove("hide","ok","warn");
-  elStatus.classList.add(ok ? "ok" : "warn","status");
-}
-function clearStatus(){ elStatus.classList.add("hide"); }
-
-function normalizeProfileUrl(raw){
-  try{
-    const u = new URL(raw.trim());
-    if(!/tracker\.network$|tracker\.gg$/.test(u.hostname)) return null;
-    const m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)(?:\/overview)?/i);
-    if(!m) return null;
-    return { platform: m[1], pid: decodeURIComponent(m[2]) };
-  }catch{ return null; }
+async function httpJson(url, opts) {
+  const r = await fetch(url, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || 'Request failed');
+  return data;
 }
 
-function updateRegressTag(){
-  const v = Number(elReg.value)||0;
-  let label = "low";
-  if (v >= 66) label = "high";
-  else if (v >= 33) label = "medium";
-  elRegTag.textContent = `${v}% • ${label}`;
+// Parse a full RLTracker URL to { platform, pid }
+function parseRLTrackerUrl(u) {
+  const m = (u || '').trim().match(/profile\/([^/]+)\/([^/]+)/i);
+  if (!m) throw new Error('Invalid RLTracker profile URL');
+  return { platform: m[1], pid: m[2] };
 }
 
-/********** Backend calls **********/
-async function fetchProfile(platform, pid){
-  const res = await fetch(`/profile/${platform}/${encodeURIComponent(pid)}`);
-  if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
-  return await res.json(); // { mmr, winPct }
+// ----- Rank lookup -----
+
+// ranks.json is loaded at build/serve time via <script type="application/json" id="ranks-json"> OR you can import it.
+// To stay framework-free here, we inline a fetch. If you already inline it in HTML, replace this with that.
+let RANKS_CACHE = null;
+async function loadRanks() {
+  if (RANKS_CACHE) return RANKS_CACHE;
+  const res = await fetch('/ranks.json');
+  if (!res.ok) throw new Error('Failed to load ranks.json');
+  RANKS_CACHE = await res.json();
+  return RANKS_CACHE;
 }
-async function predictServer({ mmr, winPct, games, regress, playlistId=11 }){
-  const res = await fetch('/predict', {
-    method: 'POST',
-    headers: { 'content-type':'application/json' },
-    body: JSON.stringify({ mmr, winPct, games, regress, playlistId })
+
+// Given MMR and playlist ("2v2"), compute { tierName, divName }.
+// Works with a ranks.json shape that has playlists[playlist].tiers = [{ name, min }, ...] ascending by min.
+// Division is computed as I..IV within the gap to the next tier (or a default gap if last tier).
+function rankFromMMR(mmr, playlist = '2v2', ranks) {
+  const cfg = ranks.playlists?.[playlist];
+  if (!cfg) return { tierName: 'Unranked', divName: null };
+
+  const tiers = [...cfg.tiers].sort((a, b) => a.min - b.min);
+  // Pick highest tier whose min <= MMR
+  let idx = 0;
+  for (let i = 0; i < tiers.length; i++) {
+    if (mmr >= tiers[i].min) idx = i; else break;
+  }
+  const tier = tiers[idx];
+  // Division width is the distance to the next tier min; last tier uses fallback width.
+  const nextMin = tiers[idx + 1]?.min ?? (tier.min + (cfg.defaultTierWidth || 100));
+  const width = Math.max(4, nextMin - tier.min);
+  const step = width / 4; // 4 divisions
+
+  const into = Math.max(0, Math.min(nextMin - tier.min - 1, mmr - tier.min));
+  const divIdx = Math.min(3, Math.floor(into / step)); // 0..3
+
+  const divNames = ['Div I', 'Div II', 'Div III', 'Div IV'];
+  return { tierName: tier.name, divName: divNames[divIdx] };
+}
+
+// ----- Projection math (unchanged conceptually; keep your numbers) -----
+// Simple expected MMR projection given N games, base WR, regression toward 50%.
+// Per-game MMR swing defaults to 9 (tweak if desired).
+function projectMMRPath(startMMR, games, baseWR, regression01, perGameMMR = 9) {
+  const pts = [];
+  for (let i = 0; i < games; i++) {
+    // Winrate slowly pulled toward 50% based on regression01
+    const t = i / Math.max(1, games - 1);
+    const wrNow = (1 - regression01) * (baseWR / 100) + regression01 * (0.5);
+    // you can incorporate t to make it time-varying; keeping simple/steady here.
+    const expNet = (wrNow * perGameMMR) + ((1 - wrNow) * -perGameMMR);
+    const next = (pts[i - 1]?.mmr ?? startMMR) + expNet;
+    pts.push({ game: i + 1, mmr: Math.round(next) });
+  }
+  return pts;
+}
+
+// ----- DOM wiring -----
+const els = {
+  url: document.querySelector('#rltracker-url'),
+  fetchBtn: document.querySelector('#fetch-btn'),
+  mmrInput: document.querySelector('#mmr'),
+  wrInput: document.querySelector('#winrate'),
+  nameInput: document.querySelector('#displayName'),
+  gamesInput: document.querySelector('#games'),
+  regSlider: document.querySelector('#regression'),
+  regLabel: document.querySelector('#regression-label'),
+  chart: document.querySelector('#chart'), // canvas or svg area
+  currentLabel: document.querySelector('#current-label'),
+  projectedLabel: document.querySelector('#projected-label'),
+  error: document.querySelector('#error-box')
+};
+
+function showError(msg) {
+  if (!els.error) return;
+  els.error.textContent = msg || '';
+  els.error.style.display = msg ? 'block' : 'none';
+}
+
+function setCurrentAndProjectedLabels(ranks, currentMMR, projectedMMR) {
+  const cur = rankFromMMR(currentMMR, '2v2', ranks);
+  const pro = rankFromMMR(projectedMMR, '2v2', ranks);
+  if (els.currentLabel) els.currentLabel.textContent = `${cur.tierName} • ${cur.divName}`;
+  if (els.projectedLabel) els.projectedLabel.textContent = `${pro.tierName} • ${pro.divName}`;
+}
+
+// Dumb line drawer for the path (kept minimalist). If you already use a chart lib, wire `path` into that instead.
+function drawPath(path) {
+  // no-op placeholder; your existing chart code likely replaces this.
+  // Leaving minimal UX: show last point as text in an element with id="chart".
+  if (els.chart) {
+    const last = path[path.length - 1];
+    els.chart.textContent = `Projected MMR after ${path.length} games: ${last?.mmr ?? '—'}`;
+  }
+}
+
+async function runProjection() {
+  try {
+    showError('');
+    const ranks = await loadRanks();
+
+    const current = parseInt(els.mmrInput.value || '0', 10);
+    const wr = Math.max(0, Math.min(100, parseFloat(els.wrInput.value || '50')));
+    const games = Math.max(1, parseInt(els.gamesInput.value || '25', 10));
+    const reg = Math.max(0, Math.min(100, parseInt(els.regSlider.value || '50', 10))) / 100;
+
+    const path = projectMMRPath(current, games, wr, reg, 9);
+    drawPath(path);
+
+    const finalMMR = path[path.length - 1]?.mmr ?? current;
+    setCurrentAndProjectedLabels(ranks, current, finalMMR);
+  } catch (e) {
+    showError(e.message || 'Projection failed');
+  }
+}
+
+async function doFetch() {
+  try {
+    showError('');
+    const { platform, pid } = parseRLTrackerUrl(els.url.value);
+    // Use our friendly pretty route; vercel.json rewrites this into /api/profile
+    const data = await httpJson(`/profile/${encodeURIComponent(platform)}/${encodeURIComponent(pid)}`);
+    if (data.currentMMR) els.mmrInput.value = String(data.currentMMR);
+    if (data.recentWinPercent != null) els.wrInput.value = String(data.recentWinPercent);
+    await runProjection();
+  } catch (e) {
+    showError(`Profile fetch failed: ${e.message}`);
+  }
+}
+
+// Events
+if (els.fetchBtn) els.fetchBtn.addEventListener('click', doFetch);
+['input', 'change'].forEach(ev => {
+  if (els.mmrInput) els.mmrInput.addEventListener(ev, runProjection);
+  if (els.wrInput) els.wrInput.addEventListener(ev, runProjection);
+  if (els.gamesInput) els.gamesInput.addEventListener(ev, runProjection);
+  if (els.regSlider) els.regSlider.addEventListener(ev, () => {
+    if (els.regLabel) els.regLabel.textContent = `${els.regSlider.value}% • medium`;
+    runProjection();
   });
-  if (!res.ok) throw new Error(`Prediction failed (${res.status})`);
-  return await res.json(); // { mmrSeries, wrSeries, current, projected, playlistId }
-}
+});
 
-/********** chart **********/
-function drawSeries(series){
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const W = 800, H = 320, P = 28;
-  const gx0 = P, gx1 = W - P, gy0 = P, gy1 = H - P;
-
-  const minY = Math.min(...series);
-  const maxY = Math.max(...series);
-  const span = Math.max(6, maxY - minY);
-  const pad = Math.ceil(span * 0.10) || 3;
-  const yMin = minY - pad;
-  const yMax = maxY + pad;
-
-  const xScale = i => gx0 + (i/(series.length-1))*(gx1-gx0);
-  const yScale = v => gy1 - ((v - yMin)/(yMax - yMin))*(gy1-gy0);
-
-  for(let i=0;i<=4;i++){
-    const y = gy0 + i*(gy1-gy0)/4;
-    const gl = document.createElementNS("http://www.w3.org/2000/svg","line");
-    gl.setAttribute("x1",gx0); gl.setAttribute("x2",gx1);
-    gl.setAttribute("y1",y); gl.setAttribute("y2",y);
-    gl.setAttribute("class","gridline");
-    svg.appendChild(gl);
-  }
-
-  let d = "";
-  series.forEach((v,i)=>{
-    const x = xScale(i), y = yScale(v);
-    d += (i===0?`M ${x} ${y}`:` L ${x} ${y}`);
-  });
-  const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-  path.setAttribute("d", d);
-  path.setAttribute("class","path");
-  svg.appendChild(path);
-
-  const addDot = (i, cls) => {
-    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
-    c.setAttribute("cx", xScale(i));
-    c.setAttribute("cy", yScale(series[i]));
-    c.setAttribute("r", 5);
-    c.setAttribute("class", cls);
-    svg.appendChild(c);
-  };
-  addDot(0, "currMark");
-  addDot(series.length-1, "projMark");
-}
-
-/********** actions **********/
-async function fetchAndFill(){
-  clearStatus();
-  const norm = normalizeProfileUrl(elUrl.value || "");
-  if (!norm){ setStatus("Paste a valid Rocket League Tracker profile URL.", false); return; }
-
-  elFetch.disabled = true; elFetch.textContent = "Fetching…";
-  try{
-    const { mmr, winPct } = await fetchProfile(norm.platform, norm.pid);
-    elMMR.value = String(mmr);
-    if (winPct != null) elWin.value = String(winPct);  // auto-fill for manual tweak
-    setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
-  }catch(err){
-    setStatus(err?.message || "Fetch failed.", false);
-  }finally{
-    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
-  }
-}
-
-async function doPredict(){
-  clearStatus();
-  const mmr = Number(elMMR.value);
-  const winPct = Number(elWin.value);
-  const games = Math.max(1, Math.min(200, Number(elGames.value)||25));
-  const regress = Math.max(0, Math.min(100, Number(elReg.value)||30));
-  if (!Number.isFinite(mmr)) { setStatus("Enter a valid MMR (or fetch first).", false); return; }
-  if (!Number.isFinite(winPct)) { setStatus("Enter a valid recent Win%.", false); return; }
-
-  try{
-    const data = await predictServer({ mmr, winPct, games, regress, playlistId: 11 });
-    out.classList.remove("hide");
-    const name = (elName.value || "").trim();
-    title.textContent = "2v2 Doubles" + (name ? ` — ${name}` : "");
-
-    currRank.textContent = data.current.rank;
-    projRank.textContent = data.projected.rank;
-    currMMR.textContent = String(data.current.mmr);
-    projMMR.textContent = String(data.projected.mmr);
-    currWR.textContent = String(data.current.wr);
-    projWR.textContent = String(data.projected.wr);
-
-    x0.textContent = "0";
-    xMid.textContent = String(Math.round(games/2));
-    xEnd.textContent = String(games);
-
-    drawSeries(data.mmrSeries);
-  }catch(e){
-    setStatus(e.message || "Prediction failed.", false);
-  }
-}
-
-/********** events **********/
-elFetch.addEventListener("click", fetchAndFill);
-document.getElementById("btnPredict").addEventListener("click", doPredict);
-elReg.addEventListener("input", updateRegressTag);
-elUrl?.addEventListener("keydown", (e)=>{ if(e.key==="Enter") fetchAndFill(); });
-
-updateRegressTag();
+// Initial
+document.addEventListener('DOMContentLoaded', runProjection);

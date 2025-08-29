@@ -1,22 +1,25 @@
 {
-  "routes": [
-    /* redirect www -> apex domain */
+  "redirects": [
     {
-      "src": "^(?:www\\.)?rlranks\\.pro/(.*)",
-      "headers": { "Location": "https://rlranks.pro/$1" },
-      "status": 308
-    },
+      "source": "https://www.rlranks.pro/:path*",
+      "destination": "https://rlranks.pro/:path*",
+      "permanent": true
+    }
+  ],
+  "routes": [
+    { "src": "^/$", "dest": "/index.html" },
+    { "src": "^/index\\.html$", "dest": "/index.html" },
 
-    { "src": "^/$", "dest": "/sitefrontend/index.html" },
-    { "src": "^/index\\.html$", "dest": "/sitefrontend/index.html" },
+    { "src": "^/style\\.css$", "dest": "/style.css" },
+    { "src": "^/script\\.js$", "dest": "/script.js" },
+    { "src": "^/monetize\\.js$", "dest": "/monetize.js" },
 
-    { "src": "^/style\\.css$", "dest": "/sitefrontend/style.css" },
-    { "src": "^/script\\.js$", "dest": "/sitefrontend/script.js" },
-    { "src": "^/monetize\\.js$", "dest": "/sitefrontend/monetize.js" },
-
+    // Public friendly route your UI calls like /profile/steam/7656... -> /api/profile?platform=steam&pid=...
     { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile?platform=$1&pid=$2" },
-    { "src": "^/predict$", "dest": "/api/predict" },
 
-    { "src": "^/api/health$", "dest": "/api/health.js" }
+    // API functions
+    { "src": "^/api/profile$", "dest": "/profile.js" },
+    { "src": "^/api/predict$", "dest": "/predict.js" },
+    { "src": "^/api/health$", "dest": "/health.js" }
   ]
 }

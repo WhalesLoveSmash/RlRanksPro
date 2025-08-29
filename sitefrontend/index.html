@@ -13,6 +13,9 @@
       <p class="sub">Paste your RLTracker profile → pull current MMR + recent Win% → see the projected path.</p>
     </header>
 
+    <!-- STATUS / ERRORS -->
+    <div id="error-box" class="status hide"></div>
+
     <!-- STEP 1: FETCH FIRST -->
     <section class="card">
       <h2 class="step">Step 1 · Fetch from RLTracker</h2>
@@ -20,14 +23,12 @@
       <div class="fetch-grid">
         <label class="full">
           RLTracker URL (required)
-          <input id="trackerUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/7656119.../overview" />
+          <input id="rltracker-url" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/7656119.../overview" />
           <small>Use your exact profile URL on rocketleague.tracker.network.</small>
         </label>
 
-        <button id="btnFetch" class="primary">Fetch Ranked 2v2</button>
+        <button id="fetch-btn" class="primary">Fetch Ranked 2v2</button>
       </div>
-
-      <div id="fetchStatus" class="status hide"></div>
 
       <details class="backup">
         <summary>Manual backup</summary>
@@ -39,12 +40,12 @@
 
           <label>
             Recent Win %
-            <input id="win" type="number" min="0" max="100" placeholder="e.g., 58" />
+            <input id="winrate" type="number" min="0" max="100" placeholder="e.g., 58" />
           </label>
 
           <label class="full">
             Display name (optional)
-            <input id="name" placeholder="player" />
+            <input id="displayName" placeholder="player" />
           </label>
         </div>
       </details>
@@ -62,8 +63,8 @@
         <label class="full">
           Win% regression toward 50% as you climb
           <div class="row">
-            <input id="regress" type="range" min="0" max="100" value="30" />
-            <span id="regressTag" class="tag">30% • medium</span>
+            <input id="regression" type="range" min="0" max="100" value="30" />
+            <span id="regression-label" class="tag">30% • medium</span>
           </div>
           <small>0% = never regresses (optimistic). 100% = snaps toward 50% quickly (harsh).</small>
         </label>
@@ -75,7 +76,7 @@
     </section>
 
     <!-- OUTPUT -->
-    <section id="out" class="card hide">
+    <section id="out" class="card">
       <div class="head">
         <h2 id="title">2v2 Doubles</h2>
         <div class="pill">Only 2v2</div>
@@ -84,18 +85,20 @@
       <div class="stats">
         <div class="badge">
           <div class="k">Current</div>
-          <div class="v" id="currRank">—</div>
+          <div class="v" id="current-label">—</div>
           <div class="s"><span id="currMMR">—</span> MMR · <span id="currWR">—</span>% WR</div>
         </div>
         <div class="badge">
           <div class="k">Projected</div>
-          <div class="v" id="projRank">—</div>
+          <div class="v" id="projected-label">—</div>
           <div class="s"><span id="projMMR">—</span> MMR · <span id="projWR">—</span>% WR (final)</div>
         </div>
       </div>
 
       <div class="chart">
         <svg id="svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
+        <!-- The script writes a simple text fallback here so you always see something even without a chart lib -->
+        <div id="chart" class="chart-note"></div>
         <div class="axis">
           <span id="x0">0</span>
           <span id="xMid">—</span>
@@ -108,6 +111,7 @@
       <small>Fetch targets the <strong>Ranked Doubles 2v2</strong> playlist. Manual fields are a fallback.</small>
     </footer>
   </main>
+
   <script src="script.js"></script>
   <script src="monetize.js" defer></script>
 </body>
