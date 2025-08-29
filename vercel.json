@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+
   "redirects": [
     {
       "source": "/(.*)",
@@ -9,20 +10,23 @@
       "statusCode": 308
     }
   ],
+
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/index.html", "destination": "/index.html" },
+
+    { "source": "/style.css", "destination": "/style.css" },
+    { "source": "/script.js", "destination": "/script.js" },
+    { "source": "/monetize.js", "destination": "/monetize.js" },
+
+    { "source": "/profile/:platform/:pid", "destination": "/api/profile.js" },
+
+    { "source": "/api/profile", "destination": "/api/profile.js" },
+    { "source": "/api/predict", "destination": "/api/predict.js" },
+    { "source": "/api/health", "destination": "/api/health.js" }
+  ],
+
   "functions": {
     "api/*.js": { "runtime": "nodejs18.x", "maxDuration": 10 }
-  },
-  "routes": [
-    { "src": "^/$", "dest": "/index.html" },
-    { "src": "^/index\\.html$", "dest": "/index.html" },
-    { "src": "^/style\\.css$", "dest": "/style.css" },
-    { "src": "^/script\\.js$", "dest": "/script.js" },
-    { "src": "^/monetize\\.js$", "dest": "/monetize.js" },
-
-    { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile.js?platform=$1&pid=$2" },
-
-    { "src": "^/api/profile$", "dest": "/api/profile.js" },
-    { "src": "^/api/predict$", "dest": "/api/predict.js" },
-    { "src": "^/api/health$", "dest": "/api/health.js" }
-  ]
-}
+  }
+} 
