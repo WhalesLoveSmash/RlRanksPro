@@ -8,11 +8,11 @@
     "deploy": "vercel --prod",
     "push-prod": "vercel --prod --force"
   },
-  "engines": {
-    "node": ">=18"
-  },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@sparticuz/chromium": "^123.0.0",
-    "puppeteer-core": "^23.3.0"
+    "puppeteer-core": "^23.3.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }

@@ -1,5 +1,6 @@
-// Scrapes RLTracker/TrackerGG. Tries a fast HTTP fetch first.
-// If blocked or parsing fails, falls back to headless Chrome via @sparticuz/chromium + puppeteer-core.
+// Scrapes RLTracker / TrackerGG.
+// 1) Plain fetch with browsery headers
+// 2) Headless Chrome fallback using puppeteer-extra + stealth + @sparticuz/chromium
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -60,18 +61,20 @@ function pick2v2FromHtml(html) {
   };
 }
 
-// ---------- Puppeteer fallback ----------
+// ---------- Stealth headless fallback ----------
 async function headlessGrab(url) {
   const chromium = require("@sparticuz/chromium");
-  const puppeteer = require("puppeteer-core");
+  const puppeteerExtra = require("puppeteer-extra");
+  const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 
-  // recommended by sparticuz for serverless
+  puppeteerExtra.use(StealthPlugin());
+
   chromium.setHeadlessMode = true;
   chromium.setGraphicsMode = false;
 
-  const browser = await puppeteer.launch({
-    args: [...chromium.args, "--disable-dev-shm-usage"],
-    defaultViewport: chromium.defaultViewport,
+  const browser = await puppeteerExtra.launch({
+    args: [...chromium.args, "--disable-dev-shm-usage", "--no-sandbox"],
+    defaultViewport: { width: 1365, height: 768 },
     executablePath: await chromium.executablePath(),
     headless: chromium.headless
   });
@@ -79,17 +82,30 @@ async function headlessGrab(url) {
   try {
     const page = await browser.newPage();
     await page.setUserAgent(UA);
+    await page.setJavaScriptEnabled(true);
+
     await page.setExtraHTTPHeaders({
       "Accept-Language": "en-US,en;q=0.9",
       "Upgrade-Insecure-Requests": "1",
       "Pragma": "no-cache",
       "Cache-Control": "no-cache",
-      "Referer": "https://tracker.gg/rocket-league/"
+      "Referer": "https://tracker.gg/rocket-league/",
+      // a few high-signal client hints
+      "sec-ch-ua": "\"Chromium\";v=\"124\", \"Not.A/Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
     });
 
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
+    // soften bot signals
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US','en'] });
+      Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+      window.chrome = { runtime: {} };
+    });
 
-    // try to get __NEXT_DATA__ directly from the page context
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+
     const next = await page.evaluate(() => {
       try {
         if (window.__NEXT_DATA__) return window.__NEXT_DATA__;
@@ -100,10 +116,7 @@ async function headlessGrab(url) {
     });
 
     let html = null;
-    if (!next) {
-      html = await page.content();
-    }
-
+    if (!next) html = await page.content();
     return { nextData: next, html };
   } finally {
     await browser.close();
@@ -122,7 +135,7 @@ module.exports = async (req, res) => {
 
     let lastStatus = 0, html = null, hitUrl = null, nextData = null;
 
-    // 1) Fast path: plain fetch
+    // 1) Fast path — plain fetch
     for (const url of targets) {
       const r = await fetchPage(url);
       lastStatus = r.status;
@@ -151,33 +164,32 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 2) Nuclear fallback: headless browser
-    let headlessResult = null, triedUrl = null;
+    // 2) Nuclear fallback — stealth headless
+    let headless = null;
     for (const url of targets) {
-      triedUrl = url;
       try {
-        headlessResult = await headlessGrab(url);
-        if (headlessResult) { hitUrl = url; break; }
-      } catch (_) {
-        // try next host
-      }
+        headless = await headlessGrab(url);
+        hitUrl = url;
+        if (headless) break;
+      } catch { /* try next */ }
     }
-    if (!headlessResult) {
-      return res.status(lastStatus || 502).json({ error: "Headless fetch failed", tried: targets });
+    if (!headless) {
+      // return 502 explicitly (not 403) so the UI message matches
+      return res.status(502).json({ error: "Headless fetch failed", tried: targets });
     }
 
-    nextData = headlessResult.nextData || (headlessResult.html ? extractNext(headlessResult.html) : null);
+    nextData = headless.nextData || (headless.html ? extractNext(headless.html) : null);
     let mmr2v2 = null, recentWinPct = null;
 
     if (nextData) {
-      const picked = pick2v2FromNext(nextData);
-      mmr2v2 = picked.mmr2v2;
-      recentWinPct = picked.recentWinPct;
+      const p = pick2v2FromNext(nextData);
+      mmr2v2 = p.mmr2v2;
+      recentWinPct = p.recentWinPct;
     }
-    if (!mmr2v2 && headlessResult.html) {
-      const picked = pick2v2FromHtml(headlessResult.html);
-      mmr2v2 = picked.mmr2v2 ?? mmr2v2;
-      recentWinPct = picked.recentWinPct ?? recentWinPct;
+    if (!mmr2v2 && headless.html) {
+      const p = pick2v2FromHtml(headless.html);
+      mmr2v2 = p.mmr2v2 ?? mmr2v2;
+      recentWinPct = p.recentWinPct ?? recentWinPct;
     }
 
     if (!mmr2v2) {
