@@ -1,10 +1,7 @@
 {
-  "functions": {
-    "api/*.js": { "runtime": "nodejs20.x" }
-  },
   "routes": [
     { "src": "^/$", "dest": "/sitefrontend/index.html" },
-    { "src": "^/index.html$", "dest": "/sitefrontend/index.html" },
+    { "src": "^/index\\.html$", "dest": "/sitefrontend/index.html" },
 
     { "src": "^/style\\.css$", "dest": "/sitefrontend/style.css" },
     { "src": "^/script\\.js$", "dest": "/sitefrontend/script.js" },
