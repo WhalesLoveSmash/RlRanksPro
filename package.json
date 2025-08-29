@@ -1,12 +1,18 @@
 {
-  "name": "rlranks-pro",
+  "name": "rlrankspro",
   "private": true,
-  "type": "commonjs",
-  "engines": { "node": ">=18" },
+  "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "dev": "vercel dev",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "push-prod": "vercel --prod --force"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.0",
+    "puppeteer-core": "^23.3.0"
+  }
 }
