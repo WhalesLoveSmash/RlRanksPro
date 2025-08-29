@@ -1,12 +1,18 @@
 {
-  "functions": { "api/*.js": { "runtime": "nodejs18.x" } },
+  "functions": {
+    "api/*.js": { "runtime": "nodejs20.x" }
+  },
   "routes": [
     { "src": "^/$", "dest": "/sitefrontend/index.html" },
     { "src": "^/index.html$", "dest": "/sitefrontend/index.html" },
+
     { "src": "^/style\\.css$", "dest": "/sitefrontend/style.css" },
     { "src": "^/script\\.js$", "dest": "/sitefrontend/script.js" },
     { "src": "^/monetize\\.js$", "dest": "/sitefrontend/monetize.js" },
+
     { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile?platform=$1&pid=$2" },
-    { "src": "^/predict$", "dest": "/api/predict" }
+    { "src": "^/predict$", "dest": "/api/predict" },
+
+    { "src": "^/api/health$", "dest": "/api/health.js" }
   ]
 }
