@@ -1,5 +1,5 @@
 RlRanks.pro
-a 2v2 Rank Predictor
+a rocket league 2v2 Rank Predictor
 
 Small web app to project your Rocket League 2v2 rank climb. Paste your Rocket League Tracker profile, pull current MMR + recent win %, then see a projection chart of where you’ll end up.
 
@@ -18,6 +18,8 @@ Rank labels: shows current + projected rank/division.
 Stack
 
 HTML + CSS + Vanilla JS
+
+Also has an android app with same name just RlRanksPro
 
 Data from Tracker Network API
 
