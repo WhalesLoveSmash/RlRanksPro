@@ -21,7 +21,7 @@ HTML + CSS + Vanilla JS
 
 Also has an android app with same name just RlRanksPro
 
-Data from Tracker Network API
+Data scraped from Rocket League Tracker pages (no API key needed)
 
 Custom SVG chart drawing
 
@@ -41,7 +41,7 @@ View your projected path.
 
 hosted on RlRanks.Pro
 
-Everything runs client-side; no backend needed.
+Everything runs client-side with a tiny serverless scraper – no external APIs.
 
 License
 

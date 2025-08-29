@@ -22,14 +22,42 @@ function extractFromNextData(nextData) {
   let rating = null, wr = null;
   for (const node of walk(nextData)) {
     const is2v2 =
-      (node?.playlistId === 11) ||
+      node?.playlistId === 11 ||
+      node?.attributes?.playlistId === 11 ||
       (typeof node?.metadata?.name === 'string' && /2v2|Doubles/i.test(node.metadata.name)) ||
-      (typeof node?.playlist === 'string' && /2v2|Doubles/i.test(node.playlist));
+      (typeof node?.playlist === 'string' && /2v2|Doubles/i.test(node.playlist)) ||
+      (typeof node?.attributes?.playlist === 'string' && /2v2|Doubles/i.test(node.attributes.playlist));
     if (!is2v2) continue;
 
-    const s = node.stats || node.Stats || node.statistics || {};
-    const candR = s.rating?.value ?? s.mmr?.value ?? s.Rating?.value ?? node.rating?.value ?? node.rating;
-    const candW = s.winPercent?.value ?? s.winPercentage?.value ?? s.winRate?.value ?? node.winPercent ?? node.winRate;
+    const s =
+      node.stats ||
+      node.Stats ||
+      node.statistics ||
+      node.data?.stats ||
+      node.attributes?.stats ||
+      {};
+
+    const candR =
+      s.rating?.value ??
+      s.rating ??
+      s.mmr?.value ??
+      s.mmr ??
+      s.Rating?.value ??
+      node.rating?.value ??
+      node.rating ??
+      node.mmr?.value ??
+      node.mmr;
+
+    const candW =
+      s.winPercent?.value ??
+      s.winPercent ??
+      s.winPercentage?.value ??
+      s.winPercentage ??
+      s.winRate?.value ??
+      s.winRate ??
+      node.winPercent ??
+      node.winPercentage ??
+      node.winRate;
 
     if (Number.isFinite(candR)) rating = Number(candR);
     if (Number.isFinite(candW)) wr = Number(candW);
@@ -76,7 +104,15 @@ module.exports = async function handler(req, res) {
       const wm = flat.match(/"win(?:Percent|Percentage|Rate)"[\s\S]*?"value"\s*:\s*(\d{1,3})/i);
       if (wm) wr = Number(wm[1]);
     }
-    if (!Number.isFinite(rating)) return bad(res, 'Could not find 2v2 rating on page JSON.', 500);
+    if (rating == null) {
+      const mm = html.match(/Ranked\s+Doubles\s+2v2[\s\S]*?(?:MMR|Rating)[^0-9]*(\d{3,4})/i);
+      if (mm) rating = Number(mm[1]);
+    }
+    if (wr == null) {
+      const wm = html.match(/Ranked\s+Doubles\s+2v2[\s\S]*?(?:Win\s*%|Win\s*Rate)[^0-9]*(\d{1,3})/i);
+      if (wm) wr = Number(wm[1]);
+    }
+    if (!Number.isFinite(rating)) return bad(res, 'Could not find 2v2 rating on page.', 500);
 
     return ok(res, {
       platform, pid,
