@@ -1,1 +1,1 @@
-console.log('loading monetize.js')
+// reserved for future ads/affiliate hooks

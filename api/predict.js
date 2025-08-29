@@ -1,5 +1,3 @@
-// api/predict.js — fixed to use ranks.json tiers (no missing "ranges")
-
 const RANKS = require('../ranks.json');
 
 function rankFromMMR(mmr, playlist = '2v2') {

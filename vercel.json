@@ -10,10 +10,7 @@
     }
   ],
   "functions": {
-    "api/*.js": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 10
-    }
+    "api/*.js": { "runtime": "nodejs18.x", "maxDuration": 10 }
   },
   "routes": [
     { "src": "^/$", "dest": "/index.html" },
@@ -21,7 +18,9 @@
     { "src": "^/style\\.css$", "dest": "/style.css" },
     { "src": "^/script\\.js$", "dest": "/script.js" },
     { "src": "^/monetize\\.js$", "dest": "/monetize.js" },
+
     { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile.js?platform=$1&pid=$2" },
+
     { "src": "^/api/profile$", "dest": "/api/profile.js" },
     { "src": "^/api/predict$", "dest": "/api/predict.js" },
     { "src": "^/api/health$", "dest": "/api/health.js" }

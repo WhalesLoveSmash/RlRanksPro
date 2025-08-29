@@ -1,118 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>2v2 Rank Predictor — RL Ranks Pro</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>2v2 Rank Predictor</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="wrap">
-    <header class="top">
-      <h1>2v2 Rank Predictor</h1>
-      <p class="sub">Paste your RLTracker profile → pull current MMR + recent Win% → see the projected path.</p>
-    </header>
+  <main class="card">
+    <h1>2v2 Rank Predictor</h1>
 
-    <!-- STATUS / ERRORS -->
-    <div id="error-box" class="status hide"></div>
+    <label>RLTracker URL</label>
+    <input id="profileUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/RelatingWave/overview">
+    <button id="fetchBtn">Fetch Ranked 2v2</button>
+    <div id="status"></div>
 
-    <!-- STEP 1: FETCH FIRST -->
-    <section class="card">
-      <h2 class="step">Step 1 · Fetch from RLTracker</h2>
-
-      <div class="fetch-grid">
-        <label class="full">
-          RLTracker URL (required)
-          <input id="rltracker-url" placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/7656119.../overview" />
-          <small>Use your exact profile URL on rocketleague.tracker.network.</small>
-        </label>
-
-        <button id="fetch-btn" class="primary">Fetch Ranked 2v2</button>
+    <div class="row">
+      <div>
+        <div>Current MMR: <span id="mmr">—</span></div>
+        <div>Current Rank: <span id="rank">—</span></div>
       </div>
-
-      <details class="backup">
-        <summary>Manual backup</summary>
-        <div class="grid">
-          <label>
-            Current 2v2 MMR
-            <input id="mmr" type="number" min="-100" max="4000" placeholder="e.g., 1065" />
-          </label>
-
-          <label>
-            Recent Win %
-            <input id="winrate" type="number" min="0" max="100" placeholder="e.g., 58" />
-          </label>
-
-          <label class="full">
-            Display name (optional)
-            <input id="displayName" placeholder="player" />
-          </label>
-        </div>
-      </details>
-    </section>
-
-    <!-- STEP 2: SETTINGS + PREDICT -->
-    <section class="card">
-      <h2 class="step">Step 2 · Projection settings</h2>
-      <div class="grid">
-        <label>
-          Games to project
-          <input id="games" type="number" min="1" max="200" value="25" />
-        </label>
-
-        <label class="full">
-          Win% regression toward 50% as you climb
-          <div class="row">
-            <input id="regression" type="range" min="0" max="100" value="30" />
-            <span id="regression-label" class="tag">30% • medium</span>
-          </div>
-          <small>0% = never regresses (optimistic). 100% = snaps toward 50% quickly (harsh).</small>
-        </label>
+      <div>
+        <label>Games</label><input id="games" type="number" value="25">
+        <label>Win%</label><input id="winPct" type="number" value="50">
+        <label>Regression</label>
+        <select id="regress">
+          <option value="30">30% (rec.)</option>
+          <option value="0">0%</option>
+          <option value="50">50%</option>
+        </select>
+        <button id="predictBtn">Predict</button>
       </div>
+    </div>
 
-      <div class="actions">
-        <button id="btnPredict" class="primary">Predict</button>
-      </div>
-    </section>
-
-    <!-- OUTPUT -->
-    <section id="out" class="card">
-      <div class="head">
-        <h2 id="title">2v2 Doubles</h2>
-        <div class="pill">Only 2v2</div>
-      </div>
-
-      <div class="stats">
-        <div class="badge">
-          <div class="k">Current</div>
-          <div class="v" id="current-label">—</div>
-          <div class="s"><span id="currMMR">—</span> MMR · <span id="currWR">—</span>% WR</div>
-        </div>
-        <div class="badge">
-          <div class="k">Projected</div>
-          <div class="v" id="projected-label">—</div>
-          <div class="s"><span id="projMMR">—</span> MMR · <span id="projWR">—</span>% WR (final)</div>
-        </div>
-      </div>
-
-      <div class="chart">
-        <svg id="svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
-        <!-- The script writes a simple text fallback here so you always see something even without a chart lib -->
-        <div id="chart" class="chart-note"></div>
-        <div class="axis">
-          <span id="x0">0</span>
-          <span id="xMid">—</span>
-          <span id="xEnd">—</span>
-        </div>
-      </div>
-    </section>
-
-    <footer class="foot">
-      <small>Fetch targets the <strong>Ranked Doubles 2v2</strong> playlist. Manual fields are a fallback.</small>
-    </footer>
+    <pre id="output"></pre>
   </main>
-
-  <script src="script.js"></script>
-  <script src="monetize.js" defer></script>
+  <script src="/script.js"></script>
 </body>
 </html>

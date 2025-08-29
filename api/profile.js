@@ -1,92 +1,60 @@
-// api/profile.js — Rocket League scrape-only (no TRN API)
+const https = require('https');
 
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-
-function ok(res, obj, status = 200) {
-  res.setHeader('access-control-allow-origin', '*');
-  res.setHeader('content-type', 'application/json; charset=utf-8');
-  res.status(status).json(obj);
-}
-function bad(res, msg, status = 500, extra = {}) {
-  ok(res, { error: msg, ...extra }, status);
+function fetchHtml(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9' } }, (r) => {
+      let data = '';
+      r.on('data', (c) => (data += c));
+      r.on('end', () => resolve({ status: r.statusCode, body: data }));
+    }).on('error', reject);
+  });
 }
 
-function* walk(x) {
-  if (!x) return;
-  if (Array.isArray(x)) for (const v of x) yield* walk(v);
-  else if (typeof x === 'object') { yield x; for (const k in x) yield* walk(x[k]); }
+function extractFromNextData(html) {
+  // RLTracker is Next.js; the page embeds a __NEXT_DATA__ JSON blob.
+  const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/i);
+  if (!m) return null;
+  try { return JSON.parse(m[1]); } catch { return null; }
 }
 
-function extractFromNextData(nextData) {
-  let rating = null, wr = null;
-  for (const node of walk(nextData)) {
-    const is2v2 =
-      (node?.playlistId === 11) ||
-      (typeof node?.metadata?.name === 'string' && /2v2|Doubles/i.test(node.metadata.name)) ||
-      (typeof node?.playlist === 'string' && /2v2|Doubles/i.test(node.playlist));
-    if (!is2v2) continue;
-
-    const s = node.stats || node.Stats || node.statistics || {};
-    const candR = s.rating?.value ?? s.mmr?.value ?? s.Rating?.value ?? node.rating?.value ?? node.rating;
-    const candW = s.winPercent?.value ?? s.winPercentage?.value ?? s.winRate?.value ?? node.winPercent ?? node.winRate;
-
-    if (Number.isFinite(candR)) rating = Number(candR);
-    if (Number.isFinite(candW)) wr = Number(candW);
-    if (rating != null && wr != null) break;
-  }
-  return { rating, wr };
+function find2v2MMR(nextData) {
+  // Be flexible: look through any plausible nodes for playlist 11 (Ranked Doubles 2v2).
+  const text = JSON.stringify(nextData);
+  // First: try “mmr” near playlistId 11
+  const mm = text.match(/"playlist(?:Id|ID)"\s*:\s*11[\s\S]{0,200}?"mmr"\s*:\s*(\d{3,5})/i)
+            || text.match(/"mmr"\s*:\s*(\d{3,5})[\s\S]{0,200}"playlist(?:Id|ID)"\s*:\s*11/i);
+  const win = text.match(/"win(?:Rate|Percent)"\s*:\s*(\d{1,3}(?:\.\d+)?)/i);
+  return {
+    mmr2v2: mm ? Number(mm[1]) : null,
+    recentWinPct: win ? Number(win[1]) : null
+  };
 }
 
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
-    if ((req.method || 'GET').toUpperCase() !== 'GET') return bad(res, 'Method not allowed', 405);
+    const { platform, pid } = req.query || {};
+    if (!platform || !pid) return res.status(400).json({ error: 'Missing platform or pid' });
 
-    let { platform, pid, url } = req.query || {};
-    if ((!platform || !pid) && url) {
-      const m = String(url).match(/profile\/([^/]+)\/([^/]+)/i);
-      if (m) { platform = m[1]; pid = m[2]; }
-    }
-    if (!platform || !pid) return bad(res, 'Missing platform or pid. Pass ?platform=&pid= or ?url=', 400);
+    const profileUrl = `https://rocketleague.tracker.network/rocket-league/profile/${encodeURIComponent(platform)}/${encodeURIComponent(pid)}/overview`;
+    const { status, body } = await fetchHtml(profileUrl);
+    if (status !== 200) return res.status(status).json({ error: 'Upstream not 200', status, url: profileUrl });
 
-    const pageUrl = `https://rocketleague.tracker.network/rocket-league/profile/${encodeURIComponent(platform)}/${encodeURIComponent(pid)}/overview`;
-    const r = await fetch(pageUrl, {
-      headers: {
-        'user-agent': UA,
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'accept-language': 'en-US,en;q=0.9',
-        referer: 'https://rocketleague.tracker.network/'
-      }
-    });
+    const nextData = extractFromNextData(body);
+    if (!nextData) return res.status(502).json({ error: 'Could not find __NEXT_DATA__', url: profileUrl });
 
-    if (!r.ok) return bad(res, `Upstream HTTP ${r.status}`, 502, { endpoint: pageUrl });
+    const { mmr2v2, recentWinPct } = find2v2MMR(nextData);
+    if (!mmr2v2) return res.status(502).json({ error: 'Could not parse 2v2 MMR', url: profileUrl });
 
-    const html = await r.text();
-    const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (!m) return bad(res, 'Blocked by site (no embedded JSON).', 502, { endpoint: pageUrl });
-
-    let nextData;
-    try { nextData = JSON.parse(m[1]); } catch { return bad(res, 'Profile JSON parse error.', 500); }
-
-    let { rating, wr } = extractFromNextData(nextData);
-    if (rating == null) {
-      const flat = JSON.stringify(nextData);
-      const mm = flat.match(/"playlistId"\s*:\s*11[\s\S]*?"(?:rating|mmr)"[\s\S]*?"value"\s*:\s*(\d{3,4})/i);
-      if (mm) rating = Number(mm[1]);
-      const wm = flat.match(/"win(?:Percent|Percentage|Rate)"[\s\S]*?"value"\s*:\s*(\d{1,3})/i);
-      if (wm) wr = Number(wm[1]);
-    }
-    if (!Number.isFinite(rating)) return bad(res, 'Could not find 2v2 rating on page JSON.', 500);
-
-    return ok(res, {
-      platform, pid,
-      currentMMR: Number(rating),
-      recentWinPercent: Number.isFinite(wr) ? Number(wr) : null,
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+    res.json({
+      platform,
+      pid: decodeURIComponent(pid),
+      currentMMR: mmr2v2,
+      recentWinPercent: recentWinPct ?? null,
       source: 'rocketleague.tracker.network',
       fetchedAt: new Date().toISOString()
     });
   } catch (e) {
-    console.error('api/profile fatal', e);
-    return bad(res, 'Unexpected server error.', 500);
+    res.status(500).json({ error: 'Scrape failed', detail: String(e) });
   }
 };
