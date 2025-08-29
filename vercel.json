@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-
   "redirects": [
     {
       "source": "/(.*)",
@@ -10,12 +9,13 @@
       "statusCode": 308
     }
   ],
-
   "rewrites": [
-    { "source": "/", "destination": "/index.html" },
-
+    { "source": "/", "destination": "/sitefrontend/index.html" },
+    { "source": "/index.html", "destination": "/sitefrontend/index.html" },
+    { "source": "/style.css", "destination": "/sitefrontend/style.css" },
+    { "source": "/script.js", "destination": "/sitefrontend/script.js" },
+    { "source": "/monetize.js", "destination": "/sitefrontend/monetize.js" },
     { "source": "/profile/:platform/:pid", "destination": "/api/profile.js" },
-
     { "source": "/api/profile", "destination": "/api/profile.js" },
     { "source": "/api/predict", "destination": "/api/predict.js" },
     { "source": "/api/health", "destination": "/api/health.js" }
