@@ -151,7 +151,9 @@ async function doFetch() {
 
     await renderProjection();
   } catch (e) {
-    showError(`Profile fetch failed: ${e.message}`);
+    console.error(e.stack);
+    const msg = e?.message || String(e);
+    showError(`Profile fetch failed: ${msg}. Try the Manual backup form.`);
   }
 }
 
