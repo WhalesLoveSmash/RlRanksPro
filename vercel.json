@@ -6,6 +6,12 @@
       "permanent": true
     }
   ],
+  "functions": {
+    "api/*.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 10
+    }
+  },
   "routes": [
     { "src": "^/$", "dest": "/index.html" },
     { "src": "^/index\\.html$", "dest": "/index.html" },
@@ -14,12 +20,12 @@
     { "src": "^/script\\.js$", "dest": "/script.js" },
     { "src": "^/monetize\\.js$", "dest": "/monetize.js" },
 
-    // Public friendly route your UI calls like /profile/steam/7656... -> /api/profile?platform=steam&pid=...
-    { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile?platform=$1&pid=$2" },
+    // Pretty URL → real API
+    { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile.js?platform=$1&pid=$2" },
 
-    // API functions
-    { "src": "^/api/profile$", "dest": "/profile.js" },
-    { "src": "^/api/predict$", "dest": "/predict.js" },
-    { "src": "^/api/health$", "dest": "/health.js" }
+    // Direct API
+    { "src": "^/api/profile$", "dest": "/api/profile.js" },
+    { "src": "^/api/predict$", "dest": "/api/predict.js" },
+    { "src": "^/api/health$", "dest": "/api/health.js" }
   ]
 }

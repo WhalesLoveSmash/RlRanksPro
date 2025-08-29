@@ -1,65 +1,60 @@
-// api/predict.js
-const { simulateSeries } = require('../lib/sim');
-const data = require('../lib/ranks.json');
+// api/predict.js — self-contained
 
-function bucketFromJson(mmr, playlistId=11){
-  const pl = data.playlists.find(p => p.id === Number(playlistId));
-  if (!pl) return {t:"Unknown", d:"—"};
-  const R = pl.ranges;
-  const topHi = R[0][3], botLo = R[R.length-1][2];
+const RANGES = require('../ranks.json').playlists[0].ranges;
 
-  // exact in-range
-  for (const [t,d,lo,hi] of R){
-    if (mmr >= lo && mmr <= hi) return {t,d};
+// Compute label from the ranges table (playlistId 11 = 2v2)
+function toRankLabel(mmr) {
+  // exact in-range first
+  for (const [tier, div, lo, hi] of RANGES) {
+    if (mmr >= lo && mmr <= hi) return div !== "—" ? `${tier} ${div}` : tier;
   }
-  // outside extremes
-  if (mmr > topHi) return {t:"Above SSL", d:"—"};
-  if (mmr < botLo) return {t:"Below Bronze I", d:"—"};
-
-  // between gaps → snap DOWN to nearest lower bracket
-  for (const [t,d,lo] of R){
-    if (mmr >= lo) return {t,d};
+  // above / below
+  if (mmr > RANGES[0][3]) return "Above SSL";
+  if (mmr < RANGES[RANGES.length-1][2]) return "Below Bronze I";
+  // snap down to nearest lower bracket
+  for (const [tier, div, lo] of RANGES) {
+    if (mmr >= lo) return div !== "—" ? `${tier} ${div}` : tier;
   }
-  return {t:"Unknown", d:"—"};
-}
-function toRankLabel(mmr, playlistId=11){
-  const b = bucketFromJson(mmr, playlistId);
-  return b.d !== "—" ? `${b.t} ${b.d}` : b.t;
+  return "Unknown";
 }
 
-const DEFAULT_HEADERS = {
-  'content-type': 'application/json; charset=utf-8',
-  'cache-control': 'no-store'
-};
+// Simple projection (same math as client)
+function simulateSeries(startMMR, baseWinPct, games, regressPct, perGame = 9) {
+  const wrSeries = [];
+  const mmrSeries = [];
+  const r = Math.max(0, Math.min(100, Number(regressPct) || 0)) / 100;
+  const wrNow = (1 - r) * (baseWinPct / 100) + r * 0.5;
+
+  let mmr = Number(startMMR);
+  for (let i = 0; i < games; i++) {
+    mmr += wrNow * perGame + (1 - wrNow) * -perGame;
+    wrSeries.push(Math.round(wrNow * 100));
+    mmrSeries.push(Math.round(mmr));
+  }
+  return { wrSeries, mmrSeries };
+}
 
 module.exports = async (req, res) => {
-  try{
+  try {
     if (req.method !== 'POST') { res.status(405).json({ error: 'POST only' }); return; }
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    let { mmr, winPct, games=25, regress=30, playlistId=11 } = body;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    let { mmr, winPct, games = 25, regress = 30 } = body;
 
-    mmr = Number(mmr); winPct = Number(winPct);
-    games = Math.max(1, Math.min(200, Number(games)||25));
-    regress = Math.max(0, Math.min(100, Number(regress)||30));
-    playlistId = Number(playlistId) || 11;
+    if (!Number.isFinite(Number(mmr))) throw new Error('Valid mmr required');
+    if (!Number.isFinite(Number(winPct))) throw new Error('Valid winPct required');
 
-    if(!Number.isFinite(mmr)) throw new Error("Valid mmr required");
-    if(!Number.isFinite(winPct)) throw new Error("Valid winPct required");
+    games = Math.max(1, Math.min(200, Number(games)));
+    const { wrSeries, mmrSeries } = simulateSeries(Number(mmr), Number(winPct), games, Number(regress));
+    const end = mmrSeries[mmrSeries.length - 1];
 
-    const { mmrSeries, wrSeries } = simulateSeries(mmr, winPct, games, regress);
-    const end = mmrSeries[mmrSeries.length-1];
-
-    const payload = {
-      playlistId,
-      mmrSeries,
-      wrSeries,
-      current:   { mmr, wr: Math.round(winPct),                         rank: toRankLabel(mmr, playlistId) },
-      projected: { mmr: end, wr: Math.round(wrSeries[wrSeries.length-1]), rank: toRankLabel(end, playlistId) }
-    };
-
-    Object.entries(DEFAULT_HEADERS).forEach(([k,v])=>res.setHeader(k,v));
-    res.status(200).send(JSON.stringify(payload));
-  }catch(e){
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.setHeader('cache-control', 'no-store');
+    res.status(200).json({
+      current:   { mmr: Number(mmr), wr: Math.round(Number(winPct)), rank: toRankLabel(Number(mmr)) },
+      projected: { mmr: end, wr: wrSeries[wrSeries.length-1],        rank: toRankLabel(end) },
+      mmrSeries, wrSeries
+    });
+  } catch (e) {
     res.status(400).json({ error: e.message || 'Bad request' });
   }
 };
