@@ -2,21 +2,29 @@
 const { simulateSeries } = require('../lib/sim');
 const data = require('../lib/ranks.json');
 
-// helper: label rank from playlist ranges
-function toRankLabel(mmr, playlistId=11) {
+function bucketFromJson(mmr, playlistId=11){
   const pl = data.playlists.find(p => p.id === Number(playlistId));
-  if (!pl) return "Unknown";
+  if (!pl) return {t:"Unknown", d:"—"};
   const R = pl.ranges;
-  for (const [tier, div, lo, hi] of R){
-    if (mmr >= lo && mmr <= hi) {
-      return div === "—" ? tier : `${tier} ${div}`;
-    }
+  const topHi = R[0][3], botLo = R[R.length-1][2];
+
+  // exact in-range
+  for (const [t,d,lo,hi] of R){
+    if (mmr >= lo && mmr <= hi) return {t,d};
   }
-  // below/above handling
-  const bottom = R[R.length-1][2], top = R[0][3];
-  if (mmr < bottom) return "Below Bronze I";
-  if (mmr > top) return "Above SSL";
-  return "Unknown";
+  // outside extremes
+  if (mmr > topHi) return {t:"Above SSL", d:"—"};
+  if (mmr < botLo) return {t:"Below Bronze I", d:"—"};
+
+  // between gaps → snap DOWN to nearest lower bracket
+  for (const [t,d,lo] of R){
+    if (mmr >= lo) return {t,d};
+  }
+  return {t:"Unknown", d:"—"};
+}
+function toRankLabel(mmr, playlistId=11){
+  const b = bucketFromJson(mmr, playlistId);
+  return b.d !== "—" ? `${b.t} ${b.d}` : b.t;
 }
 
 const DEFAULT_HEADERS = {
@@ -45,7 +53,7 @@ module.exports = async (req, res) => {
       playlistId,
       mmrSeries,
       wrSeries,
-      current: { mmr, wr: Math.round(winPct), rank: toRankLabel(mmr, playlistId) },
+      current:   { mmr, wr: Math.round(winPct),                         rank: toRankLabel(mmr, playlistId) },
       projected: { mmr: end, wr: Math.round(wrSeries[wrSeries.length-1]), rank: toRankLabel(end, playlistId) }
     };
 

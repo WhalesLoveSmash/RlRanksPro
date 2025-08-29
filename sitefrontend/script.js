@@ -43,6 +43,31 @@ function normalizeProfileUrl(raw){
   }catch{ return null; }
 }
 
+function updateRegressTag(){
+  const v = Number(elReg.value)||0;
+  let label = "low";
+  if (v >= 66) label = "high";
+  else if (v >= 33) label = "medium";
+  elRegTag.textContent = `${v}% • ${label}`;
+}
+
+/********** Backend calls **********/
+async function fetchProfile(platform, pid){
+  const res = await fetch(`/profile/${platform}/${encodeURIComponent(pid)}`);
+  if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
+  return await res.json(); // { mmr, winPct }
+}
+async function predictServer({ mmr, winPct, games, regress, playlistId=11 }){
+  const res = await fetch('/predict', {
+    method: 'POST',
+    headers: { 'content-type':'application/json' },
+    body: JSON.stringify({ mmr, winPct, games, regress, playlistId })
+  });
+  if (!res.ok) throw new Error(`Prediction failed (${res.status})`);
+  return await res.json(); // { mmrSeries, wrSeries, current, projected, playlistId }
+}
+
+/********** chart **********/
 function drawSeries(series){
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   const W = 800, H = 320, P = 28;
@@ -74,7 +99,7 @@ function drawSeries(series){
   });
   const path = document.createElementNS("http://www.w3.org/2000/svg","path");
   path.setAttribute("d", d);
-  path.setAttribute("class", "path");
+  path.setAttribute("class","path");
   svg.appendChild(path);
 
   const addDot = (i, cls) => {
@@ -89,32 +114,7 @@ function drawSeries(series){
   addDot(series.length-1, "projMark");
 }
 
-function updateRegressTag(){
-  const v = Number(elReg.value)||0;
-  let label = "low";
-  if (v >= 66) label = "high";
-  else if (v >= 33) label = "medium";
-  elRegTag.textContent = `${v}% • ${label}`;
-}
-
-/********** Backend calls **********/
-async function fetchProfile(platform, pid){
-  const res = await fetch(`/profile/${platform}/${encodeURIComponent(pid)}`);
-  if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
-  return await res.json(); // { mmr, winPct }
-}
-
-async function predictServer({ mmr, winPct, games, regress, playlistId=11 }){
-  const res = await fetch('/predict', {
-    method: 'POST',
-    headers: { 'content-type':'application/json' },
-    body: JSON.stringify({ mmr, winPct, games, regress, playlistId })
-  });
-  if (!res.ok) throw new Error(`Prediction failed (${res.status})`);
-  return await res.json(); // { mmrSeries, wrSeries, current, projected, playlistId }
-}
-
-/********** UI actions **********/
+/********** actions **********/
 async function fetchAndFill(){
   clearStatus();
   const norm = normalizeProfileUrl(elUrl.value || "");
@@ -124,7 +124,7 @@ async function fetchAndFill(){
   try{
     const { mmr, winPct } = await fetchProfile(norm.platform, norm.pid);
     elMMR.value = String(mmr);
-    if (winPct != null) elWin.value = String(winPct);
+    if (winPct != null) elWin.value = String(winPct);  // auto-fill for manual tweak
     setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
   }catch(err){
     setStatus(err?.message || "Fetch failed.", false);
@@ -139,7 +139,6 @@ async function doPredict(){
   const winPct = Number(elWin.value);
   const games = Math.max(1, Math.min(200, Number(elGames.value)||25));
   const regress = Math.max(0, Math.min(100, Number(elReg.value)||30));
-
   if (!Number.isFinite(mmr)) { setStatus("Enter a valid MMR (or fetch first).", false); return; }
   if (!Number.isFinite(winPct)) { setStatus("Enter a valid recent Win%.", false); return; }
 
@@ -166,12 +165,10 @@ async function doPredict(){
   }
 }
 
-/********** Events & init **********/
+/********** events **********/
 elFetch.addEventListener("click", fetchAndFill);
 document.getElementById("btnPredict").addEventListener("click", doPredict);
 elReg.addEventListener("input", updateRegressTag);
-
-if (elUrl) elUrl.removeAttribute("placeholder");
 elUrl?.addEventListener("keydown", (e)=>{ if(e.key==="Enter") fetchAndFill(); });
 
 updateRegressTag();

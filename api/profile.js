@@ -4,30 +4,49 @@ const DEFAULT_HEADERS = {
   'cache-control': 's-maxage=1800, stale-while-revalidate=86400'
 };
 
-// extract 2v2 from Tracker JSON
+// pick Ranked 2v2 from Tracker JSON
 function pickDoubles2v2(json){
   const segs = json?.data?.segments;
   if (!Array.isArray(segs)) throw new Error("No segments in API response.");
 
-  const target = segs.find(s => {
-    const nm = (s?.metadata?.name || "").toLowerCase();
-    return /ranked/.test(nm) && /(2v2|doubles)/.test(nm);
-  }) || segs.find(s => String(s?.metadata?.playlistId ?? s?.attributes?.playlistId) === "11");
+  const target =
+    segs.find(s => {
+      const nm = (s?.metadata?.name || "").toLowerCase();
+      return /ranked/.test(nm) && /(2v2|doubles)/.test(nm);
+    }) ||
+    segs.find(s => String(s?.metadata?.playlistId ?? s?.attributes?.playlistId) === "11");
 
   if (!target) throw new Error("Couldn't find Ranked 2v2 in your profile.");
 
   const stats = target.stats || {};
+
+  // robust MMR extraction
   const mmr = Number(
-    (stats.rating?.value ?? stats.mmr?.value ?? stats.rankScore?.value)
+    stats.rating?.value ??
+    stats.mmr?.value ??
+    stats.rankScore?.value
   );
   if (!Number.isFinite(mmr)) throw new Error("2v2 MMR missing in API.");
 
-  let winPct = Number(stats.winRatio?.value);
+  // robust Win% extraction
+  let winPct =
+    Number(stats.winRatio?.value) ??
+    Number(stats.winRate?.value) ??
+    Number(stats.wlPercentage?.value) ??
+    Number(stats.winPct?.value);
+
+  // handle fractional 0–1 form
+  if (Number.isFinite(winPct) && winPct > 0 && winPct <= 1) winPct *= 100;
+
+  // fallback compute from wins/losses or matches played
   if (!Number.isFinite(winPct)) {
-    const wins = Number(stats.wins?.value);
+    const wins   = Number(stats.wins?.value);
     const losses = Number(stats.losses?.value);
-    if (Number.isFinite(wins) && Number.isFinite(losses) && (wins+losses)>0) {
-      winPct = (wins/(wins+losses))*100;
+    const played = Number(stats.matches?.value ?? stats.games?.value ?? stats.played?.value);
+    if (Number.isFinite(wins) && Number.isFinite(losses) && (wins + losses) > 0) {
+      winPct = (wins / (wins + losses)) * 100;
+    } else if (Number.isFinite(wins) && Number.isFinite(played) && played > 0) {
+      winPct = (wins / played) * 100;
     }
   }
 
