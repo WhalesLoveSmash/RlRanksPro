@@ -135,46 +135,50 @@ function clearStatus(){ elStatus.classList.add("hide"); }
 function validateUrl(raw){
   try{
     const u = new URL(raw.trim());
-    if (!/rocketleague\.tracker\.network$/.test(u.hostname)) return null;
-    const m = u.pathname.match(/\/profile\/([^/]+)\/([^/]+)/i);
+    // allow "rocketleague.tracker.network" and "rocket-league.tracker.network"
+    if (!/(^|\.)tracker\.network$/.test(u.hostname) || !/rocket-?league\.tracker\.network$/.test(u.hostname)) {
+      // Support direct tracker.gg profile pastes too:
+      if (!/tracker\.gg$/.test(u.hostname)) return null;
+    }
+    // RLTracker path style
+    let m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)/i);
+    // tracker.gg path style
+    if (!m) m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)/i);
     if (!m) return null;
     return { href: u.href.replace(/#.*$/,""), platform: m[1], pid: decodeURIComponent(m[2]) };
   }catch{ return null; }
 }
 
-/********** API fetch (totally different from HTML scraping) **********/
+/********** API fetch (no HTML scraping) **********/
 async function fetchProfileFromAPI(platform, pid){
-  // Build TRN public profile API
+  // TRN public profile API (no key needed for basic profile read)
   const api = `https://api.tracker.gg/api/v2/rocket-league/standard/profile/${platform}/${encodeURIComponent(pid)}`;
-  // CORS-safe text proxy
+  // CORS-safe plain-text proxy
   const proxied = "https://r.jina.ai/http://" + api.replace(/^https?:\/\//,"");
   const res = await fetch(proxied, {mode:"cors"});
   if (!res.ok) throw new Error(`API fetch failed (${res.status})`);
   const txt = await res.text();
-  // r.jina.ai returns JSON as plain text; parse it
   let json;
   try { json = JSON.parse(txt); } catch { throw new Error("Bad API JSON"); }
   return json;
 }
 
-/* Extract Ranked 2v2 from TRN JSON */
+/* Extract Ranked Doubles 2v2 from TRN JSON */
 function pickDoubles2v2(json){
   const segs = json?.data?.segments;
   if (!Array.isArray(segs)) throw new Error("No segments in API response.");
 
-  // Find a segment whose name clearly indicates 2v2 ranked
+  // Prefer explicit 2v2 ranked names, fallback to playlistId 11
   const target = segs.find(s => {
     const name = (s?.metadata?.name || "").toLowerCase();
-    return /ranked/.test(name) && /2v2|doubles/.test(name);
+    return /ranked/.test(name) && /(2v2|doubles)/.test(name);
   }) || segs.find(s => {
-    // fallback: playlist id checks seen commonly for 2v2
-    const pid = s?.metadata?.playlistId ?? s?.attributes?.playlistId;
-    return pid === 11 || pid === "11"; // 11 is commonly Ranked Doubles 2v2
+    const pid = s?.metadata?.playlistId ?? s?.attributes?.playlistId ?? s?.attributes?.playlistIdValue;
+    return String(pid) === "11";
   });
 
-  if (!target) throw new Error("Couldn't find Ranked 2v2 segment.");
+  if (!target) throw new Error("Couldn't find Ranked 2v2 in your profile.");
 
-  // Possible stat keys (TRN sometimes uses rating/mmr/rankScore, and winRatio or wins/losses)
   const stats = target.stats || {};
   const mmr = Number(
     (stats.rating?.value ?? stats.mmr?.value ?? stats.rankScore?.value)
@@ -198,7 +202,10 @@ function pickDoubles2v2(json){
 async function fetchAndFill(){
   clearStatus();
   const v = validateUrl(elUrl.value || "");
-  if (!v){ setStatus("Enter a valid RLTracker profile URL.", false); return; }
+  if (!v){
+    setStatus("Enter a valid RLTracker profile URL (rocketleague.tracker.network/.../profile/<platform>/<id>).", false);
+    return;
+  }
 
   elFetch.disabled = true; elFetch.textContent = "Fetching…";
   try{
@@ -206,9 +213,9 @@ async function fetchAndFill(){
     const { mmr, winPct } = pickDoubles2v2(data);
     elMMR.value = String(mmr);
     if (winPct != null) elWin.value = String(winPct);
-    setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
+    setStatus("Fetched Ranked 2v2 MMR and Win% from Tracker Network.", true);
   }catch(err){
-    setStatus(err.message || "Fetch failed.", false);
+    setStatus(err?.message || "Fetch failed.", false);
   }finally{
     elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
   }
@@ -216,7 +223,7 @@ async function fetchAndFill(){
 
 /********** projection + chart **********/
 function simulateSeries(start, winPct, games, regressPercent){
-  const DECAY = (regressPercent/100)*0.02;
+  const DECAY = (regressPercent/100)*0.02; // gentle regression per game toward 50%
   let mmr = start;
   let wr = Math.max(0, Math.min(1, winPct/100));
   const arr = [Math.round(mmr)];
@@ -246,6 +253,7 @@ function drawSeries(series){
   const xScale = i => gx0 + (i/(series.length-1))*(gx1-gx0);
   const yScale = v => gy1 - ((v - yMin)/(yMax - yMin))*(gy1-gy0);
 
+  // gridlines
   for(let i=0;i<=4;i++){
     const y = gy0 + i*(gy1-gy0)/4;
     const gl = document.createElementNS("http://www.w3.org/2000/svg","line");
@@ -255,6 +263,7 @@ function drawSeries(series){
     svg.appendChild(gl);
   }
 
+  // path
   let d = "";
   series.forEach((v,i)=>{
     const x = xScale(i), y = yScale(v);
@@ -265,4 +274,71 @@ function drawSeries(series){
   path.setAttribute("class","path");
   svg.appendChild(path);
 
-  const m0 = document.createElementNS("http://www.w3.org/200
+  // markers
+  const addDot = (i, cls) => {
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx", xScale(i));
+    c.setAttribute("cy", yScale(series[i]));
+    c.setAttribute("r", 5);
+    c.setAttribute("class", cls);
+    svg.appendChild(c);
+  };
+  addDot(0, "currMark");
+  addDot(series.length-1, "projMark");
+}
+
+/********** rank labeling **********/
+function toRankLabel(m) {
+  const b = bucket(m);
+  return `${b.t}${b.d !== "—" ? " " + b.d : ""}`;
+}
+
+/********** UI wiring **********/
+function updateRegressTag(){
+  const v = Number(elReg.value)||0;
+  let label = "low";
+  if (v >= 66) label = "high";
+  else if (v >= 33) label = "medium";
+  elRegTag.textContent = `${v}% • ${label}`;
+}
+
+function doPredict(){
+  clearStatus();
+  const start = Number(elMMR.value);
+  const wr = Number(elWin.value);
+  const games = Math.max(1, Math.min(200, Number(elGames.value)||25));
+  const regress = Math.max(0, Math.min(100, Number(elReg.value)||30));
+
+  if (!Number.isFinite(start)) { setStatus("Enter a valid MMR (or fetch first).", false); return; }
+  if (!Number.isFinite(wr))    { setStatus("Enter a valid recent Win%.", false); return; }
+
+  const { mmrSeries, wrSeries } = simulateSeries(start, wr, games, regress);
+  const end = mmrSeries[mmrSeries.length-1];
+
+  // output surface
+  out.classList.remove("hide");
+  const name = (elName.value || "").trim();
+  title.textContent = "2v2 Doubles" + (name ? ` — ${name}` : "");
+
+  const currB = bucket(start), projB = bucket(end);
+  currRank.textContent = toRankLabel(start);
+  projRank.textContent = toRankLabel(end);
+  currMMR.textContent = String(start);
+  projMMR.textContent = String(end);
+  currWR.textContent = String(Math.round(wr));
+  projWR.textContent = String(Math.round(wrSeries[wrSeries.length-1]));
+
+  x0.textContent = "0";
+  xMid.textContent = String(Math.round(games/2));
+  xEnd.textContent = String(games);
+
+  drawSeries(mmrSeries);
+}
+
+/********** events **********/
+elFetch.addEventListener("click", fetchAndFill);
+elReg.addEventListener("input", updateRegressTag);
+document.getElementById("btnPredict").addEventListener("click", doPredict);
+
+// init
+updateRegressTag();
