@@ -1,45 +1,20 @@
 # RL Ranks Pro — 2v2 Rank Predictor
 
-Small web app to project your Rocket League 2v2 rank climb.
-
-**How it works**
-- Paste your **Rocket League Tracker** profile URL.
-- A Vercel **Serverless Function** (`/api/profile.js`) scrapes the RLTracker profile page (no TRN API key).
-- We extract current **2v2 MMR** and a **recent Win%** if present.
-- Front-end projects your next games with a simple regression model and shows current + projected rank labels.
-
----
+Paste your **Rocket League Tracker** profile → backend scrapes your **2v2 MMR** (+Win%) → front-end projects where you’ll land.
 
 ## Live
-Hosted on **rlranks.pro** (non-www enforced).
-
----
+- **rlranks.pro** (non-www enforced)
 
 ## Stack
-- **Frontend:** HTML + CSS + Vanilla JS (`index.html`, `style.css`, `script.js`)
-- **Backend (serverless):** Node 18 on Vercel (`/api/profile.js`, `/api/predict.js`, `/api/health.js`)
-- **Ranks table:** `ranks.json` (tier breakpoints + default tier width)
+- Frontend: `index.html`, `style.css`, `script.js`
+- Serverless (Vercel Node 18): `api/profile.js`, `api/predict.js`, `api/health.js`
+- Rank table: `ranks.json`
 
-> **Note:** This project **does use a backend** for scraping. The old “no backend needed” line was incorrect for production.
-
----
+> This project **does use a backend** (serverless scraping). The old “no backend needed” note was wrong.
 
 ## Endpoints
 
-### `GET /profile/:platform/:pid`
-Pretty route that rewrites to `/api/profile.js?platform=:platform&pid=:pid`.
-
-**Params**
-- `platform` — one of `steam | epic | xbox | psn`
-- `pid` — the platform identifier from your RLTracker profile URL (e.g., Steam64 or Epic name)
-
-**Response**
+**GET `/profile/:platform/:pid`** → scrapes RLTracker page HTML  
+Response:
 ```json
-{
-  "platform": "epic",
-  "pid": "RelatingWave",
-  "currentMMR": 1265,
-  "recentWinPercent": 58,
-  "source": "rocketleague.tracker.network",
-  "fetchedAt": "2025-08-29T10:00:00.000Z"
-}
+{ "platform":"epic","pid":"RelatingWave","currentMMR":1265,"recentWinPercent":58,"source":"rocketleague.tracker.network","fetchedAt":"2025-08-29T12:00:00Z" }

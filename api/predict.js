@@ -1,4 +1,4 @@
-// api/predict.js — fixed
+// api/predict.js — fixed to use ranks.json tiers (no missing "ranges")
 
 const RANKS = require('../ranks.json');
 
@@ -37,9 +37,7 @@ function simulateSeries(startMMR, baseWinPct, games, regressPct, perGame = 9) {
 
 module.exports = async (req, res) => {
   try {
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'POST only' }); return;
-    }
+    if (req.method !== 'POST') { res.status(405).json({ error: 'POST only' }); return; }
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     let { mmr, winPct, games = 25, regress = 30 } = body;
 
@@ -54,7 +52,7 @@ module.exports = async (req, res) => {
     res.setHeader('cache-control', 'no-store');
     res.status(200).json({
       current:   { mmr: Number(mmr), wr: Math.round(Number(winPct)), rank: rankFromMMR(Number(mmr)) },
-      projected: { mmr: end, wr: wrSeries[wrSeries.length-1],        rank: rankFromMMR(end) },
+      projected: { mmr: end, wr: wrSeries[wrSeries.length - 1],      rank: rankFromMMR(end) },
       mmrSeries, wrSeries
     });
   } catch (e) {
