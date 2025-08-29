@@ -4,39 +4,58 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>2v2 Rank Predictor</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>">
   <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>">
 </head>
 <body>
   <main class="card">
     <h1>2v2 Rank Predictor</h1>
 
-    <label>RLTracker URL</label>
-    <input id="profileUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/RelatingWave/overview">
-    <button id="fetchBtn">Fetch Ranked 2v2</button>
-    <div id="status"></div>
+    <section>
+      <h3>Step 1 · Fetch from RLTracker</h3>
+      <label for="profileUrl">RLTracker URL (required)</label>
+      <input id="profileUrl" placeholder="https://rocketleague.tracker.network/rocket-league/profile/epic/RelatingWave/overview">
+      <button id="fetchBtn">Fetch Ranked 2v2</button>
+      <div id="status"></div>
 
-    <div class="row">
-      <div>
-        <div>Current MMR: <span id="mmr">—</span></div>
-        <div>Current Rank: <span id="rank">—</span></div>
-      </div>
-      <div>
-        <label>Games</label><input id="games" type="number" value="25">
-        <label>Win%</label><input id="winPct" type="number" value="50">
-        <label>Regression</label>
-        <select id="regress">
-          <option value="30">30% (rec.)</option>
-          <option value="0">0%</option>
-          <option value="50">50%</option>
-        </select>
-        <button id="predictBtn">Predict</button>
-      </div>
-    </div>
+      <details style="margin-top:10px">
+        <summary>Manual backup</summary>
+        <p>Fetch targets the Ranked Doubles 2v2 playlist. Manual fields are a fallback.</p>
+      </details>
+    </section>
 
-    <pre id="output"></pre>
+    <section style="margin-top:18px">
+      <h3>Step 2 · Projection settings</h3>
+
+      <div class="row">
+        <div>
+          <div>Current MMR: <span id="mmr">—</span></div>
+          <div>Current Rank: <span id="rank">—</span></div>
+        </div>
+
+        <div>
+          <label for="games">Games to project</label>
+          <input id="games" type="number" value="25">
+
+          <label for="winPct">Win% regression toward 50% as you climb</label>
+          <input id="winPct" type="number" value="50">
+
+          <label for="regress">Regression amount</label>
+          <select id="regress">
+            <option value="30">30% · low</option>
+            <option value="0">0% · none</option>
+            <option value="50">50% · high</option>
+          </select>
+
+          <button id="predictBtn">Predict</button>
+        </div>
+      </div>
+
+      <pre id="output"></pre>
+    </section>
   </main>
-  <script src="/script.js?v=2"></script>
-  <script src="/monetize.js?v=2"></script>
+
+  <script src="/script.js?v=3"></script>
+  <script src="/monetize.js?v=3"></script>
 </body>
 </html>

@@ -1,107 +1,124 @@
-const https = require('https');
-const zlib = require('zlib');
-const MAX_REDIRECTS = 3;
+// Robust serverless scrape for RLTracker.
+// Uses Node 18's global fetch (auto-decompress), follows redirects,
+// tries __NEXT_DATA__ first, then falls back to plain-text 2v2 block scan.
 
-function fetchHtml(url, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          // Avoid compressed responses so we can regex the HTML safely.
-          'Accept-Encoding': 'identity',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
-      },
-      (res) => {
-        // Handle redirects
-        if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
-          if (redirects >= MAX_REDIRECTS) return reject(new Error('Too many redirects'));
-          const next = res.headers.location;
-          if (!next) return reject(new Error('Redirect without Location header'));
-          res.resume(); // drain
-          return resolve(fetchHtml(next.startsWith('http') ? next : new URL(next, url).href, redirects + 1));
-        }
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-        let chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          const buf = Buffer.concat(chunks);
-          let body = buf.toString('utf8');
-          resolve({ status: res.statusCode, body });
-        });
-      }
-    );
-    req.on('error', reject);
-  });
+function pick2v2FromNext(nextData) {
+  try {
+    const txt = JSON.stringify(nextData);
+    // try playlist 11 (2v2) near "mmr"
+    const mm =
+      txt.match(/"playlist(?:Id|ID)"\s*:\s*11[\s\S]{0,300}?"mmr"\s*:\s*(\d{3,5})/i) ||
+      txt.match(/"mmr"\s*:\s*(\d{3,5})[\s\S]{0,300}"playlist(?:Id|ID)"\s*:\s*11/i);
+    const win =
+      txt.match(/"win(?:Rate|Percent|sPercent)"\s*:\s*(\d{1,3}(?:\.\d+)?)/i);
+
+    return {
+      mmr2v2: mm ? Number(mm[1]) : null,
+      recentWinPct: win ? Number(win[1]) : null,
+    };
+  } catch {
+    return { mmr2v2: null, recentWinPct: null };
+  }
 }
 
-function extractNextJson(html) {
-  // 1) Standard Next.js script
-  let m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
-  if (m) {
-    try { return JSON.parse(m[1]); } catch {}
-  }
-  // 2) Inline window assignment (rare)
-  m = html.match(/window\.__NEXT_DATA__\s*=\s*({[\s\S]*?});/i);
-  if (m) {
-    try { return JSON.parse(m[1]); } catch {}
-  }
-  return null;
-}
+function pick2v2FromHtml(html) {
+  // Look for a "Ranked Doubles 2v2" block and the first 3–5 digit number after it.
+  const m = html.match(/Ranked\s*Doubles\s*2v2([\s\S]{0,800})/i);
+  if (!m) return { mmr2v2: null, recentWinPct: null };
 
-function find2v2(nextData) {
-  const text = JSON.stringify(nextData);
-
-  // Try to find an object with playlist id 11 (2v2) and an mmr near it
-  const mm =
-    text.match(/"playlist(?:Id|ID)"\s*:\s*11[\s\S]{0,300}?"mmr"\s*:\s*(\d{3,5})/i) ||
-    text.match(/"mmr"\s*:\s*(\d{3,5})[\s\S]{0,300}"playlist(?:Id|ID)"\s*:\s*11/i);
-
-  // Win% often appears as winRate or winPercent
-  const win =
-    text.match(/"win(?:Rate|Percent)"\s*:\s*(\d{1,3}(?:\.\d+)?)/i) ||
-    text.match(/"winsPercent"\s*:\s*(\d{1,3}(?:\.\d+)?)/i);
+  const block = m[1];
+  const mmrMatch = block.match(/(\d{3,5}(?:,\d{3})?)/);
+  const wrMatch =
+    block.match(/(\d{1,3}(?:\.\d+)?)\s*%[^%]{0,40}(?:Win|WR|Win\s*Rate)/i);
 
   return {
-    mmr2v2: mm ? Number(mm[1]) : null,
-    recentWinPct: win ? Number(win[1]) : null
+    mmr2v2: mmrMatch ? Number(mmrMatch[1].replace(/,/g, "")) : null,
+    recentWinPct: wrMatch ? Number(wrMatch[1]) : null,
   };
+}
+
+function extractNext(html) {
+  const a = html.match(
+    /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i
+  );
+  if (a) {
+    try { return JSON.parse(a[1]); } catch {}
+  }
+  const b = html.match(/window\.__NEXT_DATA__\s*=\s*({[\s\S]*?});/i);
+  if (b) {
+    try { return JSON.parse(b[1]); } catch {}
+  }
+  return null;
 }
 
 module.exports = async (req, res) => {
   try {
     const { platform, pid } = req.query || {};
-    if (!platform || !pid) return res.status(400).json({ error: 'Missing platform or pid' });
-
-    const profileUrl = `https://rocketleague.tracker.network/rocket-league/profile/${encodeURIComponent(platform)}/${encodeURIComponent(pid)}/overview`;
-
-    const { status, body } = await fetchHtml(profileUrl);
-    if (status !== 200) {
-      return res.status(status || 500).json({ error: 'Upstream not OK', status, url: profileUrl });
+    if (!platform || !pid) {
+      return res.status(400).json({ error: "Missing platform or pid" });
     }
 
-    const nextData = extractNextJson(body);
-    if (!nextData) {
-      return res.status(502).json({ error: 'Could not find Next.js data on page', url: profileUrl });
+    const profileUrl = `https://rocketleague.tracker.network/rocket-league/profile/${encodeURIComponent(
+      platform
+    )}/${encodeURIComponent(pid)}/overview`;
+
+    const r = await fetch(profileUrl, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+
+    const html = await r.text();
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: "Upstream not OK",
+        status: r.status,
+        url: profileUrl,
+      });
     }
 
-    const { mmr2v2, recentWinPct } = find2v2(nextData);
+    // Try Next.js JSON first
+    const next = extractNext(html);
+    let mmr2v2 = null, recentWinPct = null;
+
+    if (next) {
+      const picked = pick2v2FromNext(next);
+      mmr2v2 = picked.mmr2v2;
+      recentWinPct = picked.recentWinPct;
+    }
+
+    // Fallback: visible HTML text
     if (!mmr2v2) {
-      return res.status(502).json({ error: 'Could not parse 2v2 MMR from page data', url: profileUrl });
+      const picked = pick2v2FromHtml(html);
+      mmr2v2 = picked.mmr2v2 ?? mmr2v2;
+      recentWinPct = picked.recentWinPct ?? recentWinPct;
     }
 
-    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+    if (!mmr2v2) {
+      // Helpful diagnostics back to the UI
+      return res.status(502).json({
+        error: "Could not parse 2v2 MMR from RLTracker page",
+        hint: next ? "__NEXT_DATA__ present but no 2v2 MMR" : "No __NEXT_DATA__ in HTML",
+        url: profileUrl,
+      });
+    }
+
+    res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=300");
     res.json({
       platform,
       pid: decodeURIComponent(pid),
       currentMMR: mmr2v2,
       recentWinPercent: recentWinPct ?? null,
-      source: 'rocketleague.tracker.network',
-      fetchedAt: new Date().toISOString()
+      source: "rocketleague.tracker.network",
+      fetchedAt: new Date().toISOString(),
     });
   } catch (e) {
-    res.status(500).json({ error: 'Scrape failed', detail: String(e) });
+    res.status(500).json({ error: "Scrape failed", detail: String(e) });
   }
 };
