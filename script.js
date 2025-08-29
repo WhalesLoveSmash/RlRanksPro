@@ -87,13 +87,10 @@ const R2 = [
   ["Bronze I","Div IV",157,173],
 ];
 
-const GLOBAL_MIN = R2[R2.length - 1][2];
-const GLOBAL_MAX = R2[0][3];
 const BASE_WIN = 10, BASE_LOSS = 10;
 
 /********** DOM **********/
-const elTracker = document.getElementById("trackerInput");
-const elPlatform = document.getElementById("platform");
+const elUrl = document.getElementById("trackerUrl");
 const elFetch = document.getElementById("btnFetch");
 const elStatus = document.getElementById("fetchStatus");
 
@@ -122,102 +119,120 @@ const xEnd = document.getElementById("xEnd");
 /********** helpers **********/
 function bucket(m){
   for (const [t,d,lo,hi] of R2){ if(m>=lo && m<=hi) return {t,d,lo,hi}; }
-  if (m < GLOBAL_MIN) return {t:"Below Bronze I", d:"—", lo:GLOBAL_MIN, hi:GLOBAL_MIN};
-  return {t:"Above SSL", d:"—", lo:GLOBAL_MAX, hi:GLOBAL_MAX};
+  return m < R2[R2.length-1][2]
+    ? {t:"Below Bronze I", d:"—", lo:R2[R2.length-1][2], hi:R2[R2.length-1][2]}
+    : {t:"Above SSL", d:"—", lo:R2[0][3], hi:R2[0][3]};
 }
 function labelRank(b){ return `${b.t}${b.d!=="—" ? " "+b.d:""} (${b.lo}–${b.hi})`; }
 
-/* Build RLTracker URL from input.
-   - If they paste an URL → use as-is.
-   - Else treat as identifier on selected platform (default steam).
-   - Accept 64-bit SteamID or vanity.
-*/
-function buildTrackerURL(raw, platform){
-  const s = (raw || "").trim();
-  if (!s) return null;
-  if (/^https?:\/\//i.test(s)) return s;
+function setStatus(msg, ok=false){
+  elStatus.textContent = msg;
+  elStatus.classList.remove("hide","ok","warn");
+  elStatus.classList.add(ok ? "ok" : "warn","status");
+}
+function clearStatus(){ elStatus.classList.add("hide"); }
 
-  const plat = (platform || "steam").toLowerCase();
-  const map = { steam: "steam", epic: "epic", xbl: "xbl", psn: "psn", switch: "switch" };
-  const p = map[plat] || "steam";
-
-  // RLTracker expects exact casing; let’s not force lower/upper on the ID.
-  return `https://rocketleague.tracker.network/rocket-league/profile/${p}/${encodeURIComponent(s)}/overview`;
+function validateUrl(raw){
+  try{
+    const u = new URL(raw.trim());
+    if (!/rocketleague\.tracker\.network$/.test(u.hostname)) return null;
+    if (!/\/profile\//i.test(u.pathname)) return null;
+    return u.href;
+  }catch{ return null; }
 }
 
-/* Fetch text with a few URL variants to survive small differences (trailing slash, missing /overview) */
+/* New fetch strategy: try a few URL variants and parse aggressively */
 async function fetchProfileText(url){
-  const variants = Array.from(new Set([
-    url,
-    url.endsWith("/overview") ? url : (url.replace(/\/$/, "") + "/overview"),
-    url.replace(/\/overview\/?$/,""), // root profile URL
+  const u = url.replace(/#.*$/,'');
+  const v = Array.from(new Set([
+    u,
+    u.endsWith("/overview") ? u : (u.replace(/\/$/,"") + "/overview"),
+    u.replace(/\/overview\/?$/,""),
+    u.replace(/^https:\/\//,"http://"), // some proxies behave better on http
   ]));
 
   let lastErr = null;
-  for (const u of variants){
+  for (const link of v){
     try{
-      const proxied = "https://r.jina.ai/http://" + u.replace(/^https?:\/\//,"");
+      const proxied = "https://r.jina.ai/http://" + link.replace(/^https?:\/\//,"");
       const res = await fetch(proxied, {mode:"cors"});
       if (!res.ok) { lastErr = new Error(`Fetch failed (${res.status})`); continue; }
       const text = await res.text();
-      if (text && text.length > 2000) return text; // crude sanity check
+      if (text && text.length > 2000) return text;
       lastErr = new Error("Empty response");
     }catch(e){ lastErr = e; }
   }
   throw lastErr || new Error("Fetch failed");
 }
 
-/* Robustly pull Ranked Doubles 2v2 MMR + Win% */
-async function pullFromRLTracker(url){
-  const text = await fetchProfileText(url);
-
-  // Look for several common ways TRN labels the 2v2 playlist
-  const anchor =
-    /Ranked\s*Doubles\s*2v2/i.exec(text) ||
-    /Doubles\s*\(?2v2\)?/i.exec(text) ||
-    /Ranked\s*2v2/i.exec(text);
-
-  if(!anchor) throw new Error("Couldn't find Ranked Doubles 2v2 on profile.");
-
-  // Narrow window after the first match
-  const start = Math.max(0, anchor.index);
-  const windowText = text.slice(start, start + 5000); // allow a slightly bigger window
-
-  // MMR: prefer explicit "MMR ####"
-  let mmr = null;
-  const mmrLabel = /MMR[^0-9]{0,8}(\d{3,4})/i.exec(windowText);
-  if (mmrLabel) mmr = parseInt(mmrLabel[1], 10);
-
-  // Fallbacks around common text patterns
-  if (mmr === null) {
-    const alt =
-      /(?:Rating|Skill\s*Rating)\D{0,8}(\d{3,4})/i.exec(windowText) ||
-      /\b(\d{3,4})\b(?=[^A-Za-z]{0,12}(?:MMR|rating))/i.exec(windowText);
-    if (alt) mmr = parseInt(alt[1], 10);
+/* Parse Ranked 2v2 from raw HTML text with broad anchors + fallbacks */
+function parseRanked2v2(text){
+  // Multiple label forms seen on TRN
+  const anchors = [
+    /Ranked\s*Doubles\s*2v2/i,
+    /Doubles\s*\(?2v2\)?/i,
+    /Ranked\s*2v2/i
+  ];
+  let hit = null;
+  for (const rx of anchors){
+    const m = rx.exec(text);
+    if (m){ hit = m; break; }
   }
-  if (mmr === null) {
-    const loose = /\b(\d{3,4})\b/.exec(windowText.slice(0, 800));
-    if (loose) mmr = parseInt(loose[1], 10);
+  if (!hit) throw new Error("Couldn't find Ranked Doubles 2v2 on profile.");
+
+  // Window after anchor
+  const start = Math.max(0, hit.index);
+  const win = text.slice(start, start + 6000);
+
+  // MMR: prefer "MMR ####" or "Rating ####"
+  let mmr = null;
+  const mmrRx = /MMR[^0-9]{0,10}(\d{3,4})/i.exec(win)
+             || /Rating[^0-9]{0,10}(\d{3,4})/i.exec(win)
+             || /\b(\d{3,4})\b(?=[^A-Za-z]{0,12}(?:MMR|rating))/i.exec(win);
+  if (mmrRx) mmr = parseInt(mmrRx[1],10);
+  else {
+    // very loose fallback: first 3–4 digit number early in the window
+    const loose = /\b(\d{3,4})\b/.exec(win.slice(0, 900));
+    if (loose) mmr = parseInt(loose[1],10);
   }
   if (mmr == null) throw new Error("Couldn't locate 2v2 MMR.");
 
-  // Win %
+  // Win %: direct or computed from wins/losses
   let winPct = null;
-  const wrm = /Win\s*%[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i.exec(windowText);
-  if (wrm) winPct = Math.max(0, Math.min(100, parseFloat(wrm[1])));
+  const wr = /Win\s*%[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i.exec(win);
+  if (wr) winPct = Math.max(0, Math.min(100, parseFloat(wr[1])));
 
   if (winPct == null) {
-    const w = /Wins[^0-9]{0,6}(\d{1,4})/i.exec(windowText);
-    const l = /Losses[^0-9]{0,6}(\d{1,4})/i.exec(windowText);
+    const w = /Wins[^0-9]{0,6}(\d{1,4})/i.exec(win);
+    const l = /Losses[^0-9]{0,6}(\d{1,4})/i.exec(win);
     if (w && l) {
-      const wins = parseInt(w[1], 10), losses = parseInt(l[1], 10);
-      if (wins + losses > 0) winPct = (wins / (wins + losses)) * 100;
+      const wins = parseInt(w[1],10), losses = parseInt(l[1],10);
+      if (wins + losses > 0) winPct = (wins/(wins+losses))*100;
     }
   }
-
   return { mmr, winPct: winPct!=null ? Math.round(winPct) : null };
 }
 
+async function fetchAndFill(){
+  clearStatus();
+  const valid = validateUrl(elUrl.value || "");
+  if (!valid){ setStatus("Enter a valid RLTracker profile URL.", false); return; }
+
+  elFetch.disabled = true; elFetch.textContent = "Fetching…";
+  try{
+    const html = await fetchProfileText(valid);
+    const { mmr, winPct } = parseRanked2v2(html);
+    elMMR.value = String(mmr);
+    if (winPct!=null) elWin.value = String(winPct);
+    setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
+  }catch(err){
+    setStatus(err.message || "Fetch failed.", false);
+  }finally{
+    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
+  }
+}
+
+/********** projection + chart **********/
 function simulateSeries(start, winPct, games, regressPercent){
   const DECAY = (regressPercent/100)*0.02;
   let mmr = start;
@@ -283,47 +298,18 @@ function drawSeries(series){
   xMid.textContent = Math.floor((series.length-1)/2);
 }
 
-/********** UI **********/
-function setStatus(msg, ok=false){
-  elStatus.textContent = msg;
-  elStatus.classList.remove("hide","ok","warn");
-  elStatus.classList.add(ok ? "ok" : "warn","status");
-}
-function clearStatus(){ elStatus.classList.add("hide"); }
-
+/********** wire up **********/
 elReg.addEventListener("input", ()=>{
   const v = Number(elReg.value);
   elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
 });
-
-async function fetchAndFill(){
-  clearStatus();
-  const built = buildTrackerURL(elTracker.value, elPlatform ? elPlatform.value : "steam");
-  if(!built){ setStatus("Enter a full RLTracker URL or a name/ID.", false); return; }
-  elFetch.disabled = true; elFetch.textContent = "Fetching…";
-  try{
-    const { mmr, winPct } = await pullFromRLTracker(built);
-    elMMR.value = String(mmr);
-    if (winPct!=null) elWin.value = String(winPct);
-    setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
-  }catch(err){
-    // Nice hint for the common typo case
-    const id = (elTracker.value || "").trim();
-    const tip = /^\d{17}$/.test(id)
-      ? " (SteamID64 looks fine; double-check the profile is public)"
-      : " (TIP: paste your full RLTracker URL or your 17-digit SteamID64 for a guaranteed match)";
-    setStatus((err.message || "Fetch failed.") + tip, false);
-  }finally{
-    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
-  }
-}
-
 elFetch.addEventListener("click", fetchAndFill);
 
 document.getElementById("btnPredict").addEventListener("click", async ()=>{
   clearStatus();
 
-  if (!elMMR.value && elTracker.value.trim()){
+  // If user pasted URL but forgot to fetch, try once automatically
+  if (!elMMR.value && (elUrl.value || "").trim()){
     try{ await fetchAndFill(); }catch{}
   }
 
