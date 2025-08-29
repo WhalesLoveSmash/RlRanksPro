@@ -1,5 +1,12 @@
 {
   "routes": [
+    /* redirect www -> apex domain */
+    {
+      "src": "^(?:www\\.)?rlranks\\.pro/(.*)",
+      "headers": { "Location": "https://rlranks.pro/$1" },
+      "status": 308
+    },
+
     { "src": "^/$", "dest": "/sitefrontend/index.html" },
     { "src": "^/index\\.html$", "dest": "/sitefrontend/index.html" },
 
