@@ -23,9 +23,5 @@
     { "source": "/api/profile", "destination": "/api/profile.js" },
     { "source": "/api/predict", "destination": "/api/predict.js" },
     { "source": "/api/health", "destination": "/api/health.js" }
-  ],
-
-  "functions": {
-    "api/profile.js": { "runtime": "nodejs20.x", "memory": 1024, "maxDuration": 10 }
-  }
+  ]
 }
