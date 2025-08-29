@@ -1,4 +1,4 @@
-/********** 2v2 division ranges **********/
+/********** 2v2 division ranges (unchanged) **********/
 const R2 = [
   ["Supersonic Legend","—",1861,2105],
   ["Grand Champion III","Div I",1715,1736],
@@ -116,15 +116,7 @@ const x0 = document.getElementById("x0");
 const xMid = document.getElementById("xMid");
 const xEnd = document.getElementById("xEnd");
 
-/********** helpers **********/
-function bucket(m){
-  for (const [t,d,lo,hi] of R2){ if(m>=lo && m<=hi) return {t,d,lo,hi}; }
-  return m < R2[R2.length-1][2]
-    ? {t:"Below Bronze I", d:"—", lo:R2[R2.length-1][2], hi:R2[R2.length-1][2]}
-    : {t:"Above SSL", d:"—", lo:R2[0][3], hi:R2[0][3]};
-}
-function labelRank(b){ return `${b.t}${b.d!=="—" ? " "+b.d:""} (${b.lo}–${b.hi})`; }
-
+/********** small helpers **********/
 function setStatus(msg, ok=false){
   elStatus.textContent = msg;
   elStatus.classList.remove("hide","ok","warn");
@@ -132,50 +124,88 @@ function setStatus(msg, ok=false){
 }
 function clearStatus(){ elStatus.classList.add("hide"); }
 
-function validateUrl(raw){
+function bucket(m){
+  for (const [t,d,lo,hi] of R2){ if(m>=lo && m<=hi) return {t,d,lo,hi}; }
+  return m < R2[R2.length-1][2]
+    ? {t:"Below Bronze I", d:"—", lo:R2[R2.length-1][2], hi:R2[R2.length-1][2]}
+    : {t:"Above SSL", d:"—", lo:R2[0][3], hi:R2[0][3]};
+}
+function toRankLabel(m) {
+  const b = bucket(m);
+  return `${b.t}${b.d !== "—" ? " " + b.d : ""}`;
+}
+
+/********** URL handling (accepts .../overview too) **********/
+function normalizeProfileUrl(raw){
   try{
     const u = new URL(raw.trim());
-    // allow "rocketleague.tracker.network" and "rocket-league.tracker.network"
-    if (!/(^|\.)tracker\.network$/.test(u.hostname) || !/rocket-?league\.tracker\.network$/.test(u.hostname)) {
-      // Support direct tracker.gg profile pastes too:
-      if (!/tracker\.gg$/.test(u.hostname)) return null;
-    }
-    // RLTracker path style
-    let m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)/i);
-    // tracker.gg path style
-    if (!m) m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)/i);
-    if (!m) return null;
-    return { href: u.href.replace(/#.*$/,""), platform: m[1], pid: decodeURIComponent(m[2]) };
+    // Allow tracker network and tracker.gg
+    if(!/tracker\.network$|tracker\.gg$/.test(u.hostname)) return null;
+
+    // expected: /rocket-league/profile/<platform>/<id>[/overview]
+    const m = u.pathname.match(/\/rocket-?league\/profile\/([^/]+)\/([^/]+)(?:\/overview)?/i);
+    if(!m) return null;
+
+    const platform = m[1];
+    const pid = decodeURIComponent(m[2]);
+    return { platform, pid };
   }catch{ return null; }
 }
 
-/********** API fetch (no HTML scraping) **********/
-async function fetchProfileFromAPI(platform, pid){
-  // TRN public profile API (no key needed for basic profile read)
-  const api = `https://api.tracker.gg/api/v2/rocket-league/standard/profile/${platform}/${encodeURIComponent(pid)}`;
-  // CORS-safe plain-text proxy
-  const proxied = "https://r.jina.ai/http://" + api.replace(/^https?:\/\//,"");
-  const res = await fetch(proxied, {mode:"cors"});
-  if (!res.ok) throw new Error(`API fetch failed (${res.status})`);
-  const txt = await res.text();
-  let json;
-  try { json = JSON.parse(txt); } catch { throw new Error("Bad API JSON"); }
-  return json;
+/********** Safe JSON fetch with proxy rotation **********/
+async function getJSONWithFallbacks(url){
+  const targets = [
+    // try direct first (may work if you run file via dev server with proper headers)
+    { url, mode: "cors" },
+    // allorigins (raw passthrough)
+    { url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(url), mode: "cors" },
+    // r.jina.ai mirror (HTML sometimes; we’ll check)
+    { url: "https://r.jina.ai/http://" + url.replace(/^https?:\/\//,""), mode: "cors" },
+  ];
+
+  let lastErr;
+  for (const t of targets){
+    try{
+      const res = await fetch(t.url, { mode: t.mode });
+      const text = await res.text();
+
+      // try to parse only if it looks like JSON
+      const trimmed = text.trim();
+
+      // Some proxies may wrap/escape; attempt safe parse
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        return JSON.parse(trimmed);
+      }
+
+      // Sometimes proxies prefix junk. Try to find first JSON object quickly.
+      const firstBrace = trimmed.indexOf("{");
+      if (firstBrace !== -1) {
+        const maybe = trimmed.slice(firstBrace);
+        try { return JSON.parse(maybe); } catch(e){}
+      }
+
+      throw new Error("Non-JSON response");
+    }catch(e){
+      lastErr = e;
+    }
+  }
+  throw new Error(lastErr?.message || "Fetch failed");
 }
 
-/* Extract Ranked Doubles 2v2 from TRN JSON */
+/********** Tracker API -> pick Ranked 2v2 **********/
+async function fetchProfileFromAPI(platform, pid){
+  const api = `https://api.tracker.gg/api/v2/rocket-league/standard/profile/${platform}/${encodeURIComponent(pid)}`;
+  return await getJSONWithFallbacks(api);
+}
+
 function pickDoubles2v2(json){
   const segs = json?.data?.segments;
   if (!Array.isArray(segs)) throw new Error("No segments in API response.");
 
-  // Prefer explicit 2v2 ranked names, fallback to playlistId 11
   const target = segs.find(s => {
-    const name = (s?.metadata?.name || "").toLowerCase();
-    return /ranked/.test(name) && /(2v2|doubles)/.test(name);
-  }) || segs.find(s => {
-    const pid = s?.metadata?.playlistId ?? s?.attributes?.playlistId ?? s?.attributes?.playlistIdValue;
-    return String(pid) === "11";
-  });
+    const nm = (s?.metadata?.name || "").toLowerCase();
+    return /ranked/.test(nm) && /(2v2|doubles)/.test(nm);
+  }) || segs.find(s => String(s?.metadata?.playlistId ?? s?.attributes?.playlistId) === "11");
 
   if (!target) throw new Error("Couldn't find Ranked 2v2 in your profile.");
 
@@ -197,33 +227,9 @@ function pickDoubles2v2(json){
   return { mmr: Math.round(mmr), winPct: Number.isFinite(winPct) ? Math.round(winPct) : null };
 }
 
-/********** end API helpers **********/
-
-async function fetchAndFill(){
-  clearStatus();
-  const v = validateUrl(elUrl.value || "");
-  if (!v){
-    setStatus("Enter a valid RLTracker profile URL (rocketleague.tracker.network/.../profile/<platform>/<id>).", false);
-    return;
-  }
-
-  elFetch.disabled = true; elFetch.textContent = "Fetching…";
-  try{
-    const data = await fetchProfileFromAPI(v.platform, v.pid);
-    const { mmr, winPct } = pickDoubles2v2(data);
-    elMMR.value = String(mmr);
-    if (winPct != null) elWin.value = String(winPct);
-    setStatus("Fetched Ranked 2v2 MMR and Win% from Tracker Network.", true);
-  }catch(err){
-    setStatus(err?.message || "Fetch failed.", false);
-  }finally{
-    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
-  }
-}
-
-/********** projection + chart **********/
+/********** simulation + chart (unchanged) **********/
 function simulateSeries(start, winPct, games, regressPercent){
-  const DECAY = (regressPercent/100)*0.02; // gentle regression per game toward 50%
+  const DECAY = (regressPercent/100)*0.02;
   let mmr = start;
   let wr = Math.max(0, Math.min(1, winPct/100));
   const arr = [Math.round(mmr)];
@@ -253,7 +259,6 @@ function drawSeries(series){
   const xScale = i => gx0 + (i/(series.length-1))*(gx1-gx0);
   const yScale = v => gy1 - ((v - yMin)/(yMax - yMin))*(gy1-gy0);
 
-  // gridlines
   for(let i=0;i<=4;i++){
     const y = gy0 + i*(gy1-gy0)/4;
     const gl = document.createElementNS("http://www.w3.org/2000/svg","line");
@@ -263,7 +268,6 @@ function drawSeries(series){
     svg.appendChild(gl);
   }
 
-  // path
   let d = "";
   series.forEach((v,i)=>{
     const x = xScale(i), y = yScale(v);
@@ -274,7 +278,6 @@ function drawSeries(series){
   path.setAttribute("class","path");
   svg.appendChild(path);
 
-  // markers
   const addDot = (i, cls) => {
     const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
     c.setAttribute("cx", xScale(i));
@@ -287,13 +290,7 @@ function drawSeries(series){
   addDot(series.length-1, "projMark");
 }
 
-/********** rank labeling **********/
-function toRankLabel(m) {
-  const b = bucket(m);
-  return `${b.t}${b.d !== "—" ? " " + b.d : ""}`;
-}
-
-/********** UI wiring **********/
+/********** UI **********/
 function updateRegressTag(){
   const v = Number(elReg.value)||0;
   let label = "low";
@@ -315,12 +312,10 @@ function doPredict(){
   const { mmrSeries, wrSeries } = simulateSeries(start, wr, games, regress);
   const end = mmrSeries[mmrSeries.length-1];
 
-  // output surface
   out.classList.remove("hide");
   const name = (elName.value || "").trim();
   title.textContent = "2v2 Doubles" + (name ? ` — ${name}` : "");
 
-  const currB = bucket(start), projB = bucket(end);
   currRank.textContent = toRankLabel(start);
   projRank.textContent = toRankLabel(end);
   currMMR.textContent = String(start);
@@ -335,10 +330,40 @@ function doPredict(){
   drawSeries(mmrSeries);
 }
 
-/********** events **********/
+/********** Fetch button **********/
+async function fetchAndFill(){
+  clearStatus();
+
+  const norm = normalizeProfileUrl(elUrl.value || "");
+  if (!norm){
+    setStatus("Paste a valid Rocket League Tracker profile URL.", false);
+    return;
+  }
+
+  elFetch.disabled = true; elFetch.textContent = "Fetching…";
+  try{
+    const data = await fetchProfileFromAPI(norm.platform, norm.pid);
+    const { mmr, winPct } = pickDoubles2v2(data);
+    elMMR.value = String(mmr);
+    if (winPct != null) elWin.value = String(winPct);
+    setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
+  }catch(err){
+    setStatus(err?.message || "Fetch failed.", false);
+  }finally{
+    elFetch.disabled = false; elFetch.textContent = "Fetch Ranked 2v2";
+  }
+}
+
+/********** Events & init **********/
 elFetch.addEventListener("click", fetchAndFill);
-elReg.addEventListener("input", updateRegressTag);
 document.getElementById("btnPredict").addEventListener("click", doPredict);
+elReg.addEventListener("input", updateRegressTag);
+
+// remove any placeholder text in the URL field (no “example link” showing)
+if (elUrl) elUrl.removeAttribute("placeholder");
+
+// allow Enter key to trigger fetch if the URL box is focused
+elUrl?.addEventListener("keydown", (e)=>{ if(e.key==="Enter") fetchAndFill(); });
 
 // init
 updateRegressTag();
