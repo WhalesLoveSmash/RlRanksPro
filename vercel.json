@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "api/*.js": { "runtime": "nodejs18.x" }
+  },
+  "routes": [
+    { "src": "/profile/([^/]+)/(.+)", "dest": "/api/profile?platform=$1&pid=$2" },
+    { "src": "/predict", "dest": "/api/predict" }
+  ]
+}
