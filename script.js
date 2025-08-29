@@ -136,94 +136,76 @@ function validateUrl(raw){
   try{
     const u = new URL(raw.trim());
     if (!/rocketleague\.tracker\.network$/.test(u.hostname)) return null;
-    if (!/\/profile\//i.test(u.pathname)) return null;
-    return u.href;
+    const m = u.pathname.match(/\/profile\/([^/]+)\/([^/]+)/i);
+    if (!m) return null;
+    return { href: u.href.replace(/#.*$/,""), platform: m[1], pid: decodeURIComponent(m[2]) };
   }catch{ return null; }
 }
 
-/* New fetch strategy: try a few URL variants and parse aggressively */
-async function fetchProfileText(url){
-  const u = url.replace(/#.*$/,'');
-  const v = Array.from(new Set([
-    u,
-    u.endsWith("/overview") ? u : (u.replace(/\/$/,"") + "/overview"),
-    u.replace(/\/overview\/?$/,""),
-    u.replace(/^https:\/\//,"http://"), // some proxies behave better on http
-  ]));
-
-  let lastErr = null;
-  for (const link of v){
-    try{
-      const proxied = "https://r.jina.ai/http://" + link.replace(/^https?:\/\//,"");
-      const res = await fetch(proxied, {mode:"cors"});
-      if (!res.ok) { lastErr = new Error(`Fetch failed (${res.status})`); continue; }
-      const text = await res.text();
-      if (text && text.length > 2000) return text;
-      lastErr = new Error("Empty response");
-    }catch(e){ lastErr = e; }
-  }
-  throw lastErr || new Error("Fetch failed");
+/********** API fetch (totally different from HTML scraping) **********/
+async function fetchProfileFromAPI(platform, pid){
+  // Build TRN public profile API
+  const api = `https://api.tracker.gg/api/v2/rocket-league/standard/profile/${platform}/${encodeURIComponent(pid)}`;
+  // CORS-safe text proxy
+  const proxied = "https://r.jina.ai/http://" + api.replace(/^https?:\/\//,"");
+  const res = await fetch(proxied, {mode:"cors"});
+  if (!res.ok) throw new Error(`API fetch failed (${res.status})`);
+  const txt = await res.text();
+  // r.jina.ai returns JSON as plain text; parse it
+  let json;
+  try { json = JSON.parse(txt); } catch { throw new Error("Bad API JSON"); }
+  return json;
 }
 
-/* Parse Ranked 2v2 from raw HTML text with broad anchors + fallbacks */
-function parseRanked2v2(text){
-  // Multiple label forms seen on TRN
-  const anchors = [
-    /Ranked\s*Doubles\s*2v2/i,
-    /Doubles\s*\(?2v2\)?/i,
-    /Ranked\s*2v2/i
-  ];
-  let hit = null;
-  for (const rx of anchors){
-    const m = rx.exec(text);
-    if (m){ hit = m; break; }
-  }
-  if (!hit) throw new Error("Couldn't find Ranked Doubles 2v2 on profile.");
+/* Extract Ranked 2v2 from TRN JSON */
+function pickDoubles2v2(json){
+  const segs = json?.data?.segments;
+  if (!Array.isArray(segs)) throw new Error("No segments in API response.");
 
-  // Window after anchor
-  const start = Math.max(0, hit.index);
-  const win = text.slice(start, start + 6000);
+  // Find a segment whose name clearly indicates 2v2 ranked
+  const target = segs.find(s => {
+    const name = (s?.metadata?.name || "").toLowerCase();
+    return /ranked/.test(name) && /2v2|doubles/.test(name);
+  }) || segs.find(s => {
+    // fallback: playlist id checks seen commonly for 2v2
+    const pid = s?.metadata?.playlistId ?? s?.attributes?.playlistId;
+    return pid === 11 || pid === "11"; // 11 is commonly Ranked Doubles 2v2
+  });
 
-  // MMR: prefer "MMR ####" or "Rating ####"
-  let mmr = null;
-  const mmrRx = /MMR[^0-9]{0,10}(\d{3,4})/i.exec(win)
-             || /Rating[^0-9]{0,10}(\d{3,4})/i.exec(win)
-             || /\b(\d{3,4})\b(?=[^A-Za-z]{0,12}(?:MMR|rating))/i.exec(win);
-  if (mmrRx) mmr = parseInt(mmrRx[1],10);
-  else {
-    // very loose fallback: first 3–4 digit number early in the window
-    const loose = /\b(\d{3,4})\b/.exec(win.slice(0, 900));
-    if (loose) mmr = parseInt(loose[1],10);
-  }
-  if (mmr == null) throw new Error("Couldn't locate 2v2 MMR.");
+  if (!target) throw new Error("Couldn't find Ranked 2v2 segment.");
 
-  // Win %: direct or computed from wins/losses
-  let winPct = null;
-  const wr = /Win\s*%[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i.exec(win);
-  if (wr) winPct = Math.max(0, Math.min(100, parseFloat(wr[1])));
+  // Possible stat keys (TRN sometimes uses rating/mmr/rankScore, and winRatio or wins/losses)
+  const stats = target.stats || {};
+  const mmr = Number(
+    (stats.rating?.value ?? stats.mmr?.value ?? stats.rankScore?.value)
+  );
+  if (!Number.isFinite(mmr)) throw new Error("2v2 MMR missing in API.");
 
-  if (winPct == null) {
-    const w = /Wins[^0-9]{0,6}(\d{1,4})/i.exec(win);
-    const l = /Losses[^0-9]{0,6}(\d{1,4})/i.exec(win);
-    if (w && l) {
-      const wins = parseInt(w[1],10), losses = parseInt(l[1],10);
-      if (wins + losses > 0) winPct = (wins/(wins+losses))*100;
+  let winPct = Number(stats.winRatio?.value);
+  if (!Number.isFinite(winPct)) {
+    const wins = Number(stats.wins?.value);
+    const losses = Number(stats.losses?.value);
+    if (Number.isFinite(wins) && Number.isFinite(losses) && (wins+losses)>0) {
+      winPct = (wins/(wins+losses))*100;
     }
   }
-  return { mmr, winPct: winPct!=null ? Math.round(winPct) : null };
+
+  return { mmr: Math.round(mmr), winPct: Number.isFinite(winPct) ? Math.round(winPct) : null };
 }
+
+/********** end API helpers **********/
 
 async function fetchAndFill(){
   clearStatus();
-  const valid = validateUrl(elUrl.value || "");
-  if (!valid){ setStatus("Enter a valid RLTracker profile URL.", false); return; }
+  const v = validateUrl(elUrl.value || "");
+  if (!v){ setStatus("Enter a valid RLTracker profile URL.", false); return; }
 
   elFetch.disabled = true; elFetch.textContent = "Fetching…";
   try{
-    const html = await fetchProfileText(valid);
-    const { mmr, winPct } = parseRanked2v2(html);
+    const data = await fetchProfileFromAPI(v.platform, v.pid);
+    const { mmr, winPct } = pickDoubles2v2(data);
     elMMR.value = String(mmr);
-    if (winPct!=null) elWin.value = String(winPct);
+    if (winPct != null) elWin.value = String(winPct);
     setStatus("Fetched Ranked 2v2 MMR and Win%.", true);
   }catch(err){
     setStatus(err.message || "Fetch failed.", false);
@@ -283,58 +265,4 @@ function drawSeries(series){
   path.setAttribute("class","path");
   svg.appendChild(path);
 
-  const m0 = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  m0.setAttribute("cx", xScale(0)); m0.setAttribute("cy", yScale(series[0]));
-  m0.setAttribute("r", 6); m0.setAttribute("class","currMark");
-  svg.appendChild(m0);
-
-  const m1 = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  m1.setAttribute("cx", xScale(series.length-1)); m1.setAttribute("cy", yScale(series.at(-1)));
-  m1.setAttribute("r", 7); m1.setAttribute("class","projMark");
-  svg.appendChild(m1);
-
-  x0.textContent = 0;
-  xEnd.textContent = series.length-1;
-  xMid.textContent = Math.floor((series.length-1)/2);
-}
-
-/********** wire up **********/
-elReg.addEventListener("input", ()=>{
-  const v = Number(elReg.value);
-  elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
-});
-elFetch.addEventListener("click", fetchAndFill);
-
-document.getElementById("btnPredict").addEventListener("click", async ()=>{
-  clearStatus();
-
-  // If user pasted URL but forgot to fetch, try once automatically
-  if (!elMMR.value && (elUrl.value || "").trim()){
-    try{ await fetchAndFill(); }catch{}
-  }
-
-  const name = (elName && elName.value || "").trim();
-  const mmrNow = Number(elMMR.value);
-  const winPct = Number(elWin.value);
-  const games = Number(elGames.value || 25);
-  const reg = Number(elReg.value || 30);
-
-  if (Number.isNaN(mmrNow)) { setStatus("Missing current 2v2 MMR. Fetch or type it in backup.", false); return; }
-  if (Number.isNaN(winPct)) { setStatus("Missing recent Win%. Fetch or type it in backup.", false); return; }
-
-  const currB = bucket(mmrNow);
-  currRank.textContent = labelRank(currB);
-  currMMR.textContent = mmrNow;
-  currWR.textContent = winPct.toFixed(0);
-
-  const { mmrSeries, wrSeries } = simulateSeries(mmrNow, winPct, games, reg);
-  const finalMMR = mmrSeries.at(-1);
-  const projB = bucket(finalMMR);
-  projRank.textContent = labelRank(projB);
-  projMMR.textContent = finalMMR;
-  projWR.textContent = wrSeries.at(-1).toFixed(0);
-
-  drawSeries(mmrSeries);
-  title.textContent = name ? `${name} — 2v2 Doubles` : `2v2 Doubles`;
-  out.classList.remove("hide");
-});
+  const m0 = document.createElementNS("http://www.w3.org/200
