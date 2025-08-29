@@ -1,4 +1,5 @@
-RL Ranks Pro — 2v2 Rank Predictor
+RL Ranks Pro 
+a 2v2 Rank Predictor
 
 Small web app to project your Rocket League 2v2 rank climb. Paste your Rocket League Tracker profile, pull current MMR + recent win %, then see a projection chart of where you’ll end up.
 
@@ -26,24 +27,17 @@ Usage
 
 Open index.html in your browser (or use Live Server).
 
-Paste your Rocket League Tracker profile URL, e.g.:
-
-https://rocketleague.tracker.network/rocket-league/profile/steam/7656119.../overview
-
+Paste your Rocket League Tracker profile URL
 
 Click Fetch Ranked 2v2.
 
-If fetch fails, open Manual backup and enter your MMR + Win%.
+If fetch fails, open Manual backup and enter your MMR + Win %.
 
 Adjust settings → click Predict.
 
 View your projected path.
 
-Deploy
-
-Works on GitHub Pages.
-
-CNAME file included for custom domain.
+hosted on RlRanks.Pro
 
 Everything runs client-side; no backend needed.
 
