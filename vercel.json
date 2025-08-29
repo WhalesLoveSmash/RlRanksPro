@@ -24,9 +24,5 @@
     { "source": "/api/profile", "destination": "/api/profile.js" },
     { "source": "/api/predict", "destination": "/api/predict.js" },
     { "source": "/api/health", "destination": "/api/health.js" }
-  ],
-
-  "functions": {
-    "api/*.js": { "runtime": "nodejs20.x", "maxDuration": 10 }
-  }
+  ]
 }
