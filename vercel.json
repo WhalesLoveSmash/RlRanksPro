@@ -12,12 +12,12 @@
   ],
 
   "rewrites": [
-    { "source": "/", "destination": "/index.html" },
-    { "source": "/index.html", "destination": "/index.html" },
+    { "source": "/", "destination": "/sitefrontend/index.html" },
+    { "source": "/index.html", "destination": "/sitefrontend/index.html" },
 
-    { "source": "/style.css", "destination": "/style.css" },
-    { "source": "/script.js", "destination": "/script.js" },
-    { "source": "/monetize.js", "destination": "/monetize.js" },
+    { "source": "/style.css", "destination": "/sitefrontend/style.css" },
+    { "source": "/script.js", "destination": "/sitefrontend/script.js" },
+    { "source": "/monetize.js", "destination": "/sitefrontend/monetize.js" },
 
     { "source": "/profile/:platform/:pid", "destination": "/api/profile.js" },
 
@@ -29,4 +29,4 @@
   "functions": {
     "api/*.js": { "runtime": "nodejs18.x", "maxDuration": 10 }
   }
-} 
+}
