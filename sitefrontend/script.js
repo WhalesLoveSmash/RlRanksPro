@@ -88,7 +88,8 @@ function pick2v2FromText(text){
 }
 
 async function pullFromRLTracker(url){
-  const prox = "https://r.jina.ai/http/"+url.replace(/^https?:\/\//,'');
+  // IMPORTANT: r.jina.ai requires the *full* URL (including https://) after /http/
+  const prox = "https://r.jina.ai/http/" + url; // <- fixed (we no longer strip the scheme)
   const res  = await fetch(prox, {mode:"cors"});
   if(!res.ok) throw new Error(`Upstream not OK (${res.status})`);
   const text = await res.text();
@@ -118,11 +119,10 @@ function bucket(m){
     for (const r of RANKS){
       if (m >= r.lo && m <= r.hi) return r;
     }
-    // nearest
     const closest = [...RANKS].sort((a,b)=>Math.abs(m-a.lo)-Math.abs(m-b.lo))[0];
     return closest || { t:"Unranked", d:"—", lo:0, hi:0 };
   } else {
-    // fallback coarse bands
+    // coarse fallback
     const bands = [
       {t:"Bronze", d:"I", lo:0, hi:399},
       {t:"Silver", d:"I", lo:400, hi:799},
@@ -146,7 +146,7 @@ function simulateSeries(start, winPct, games, regressPercent){
   const mmrSeries = [Math.round(mmr)];
   const wrSeries  = [+(wr*100).toFixed(1)];
 
-  const DECAY = Math.min(0.98, Math.max(0.0, regressPercent/100)); // 0..1
+  const DECAY = Math.min(0.98, Math.max(0.0, regressPercent/100));
   for(let i=0;i<games;i++){
     const diff = wr - 0.5;
     wr = 0.5 + diff*(1-DECAY);
