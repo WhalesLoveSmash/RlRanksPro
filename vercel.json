@@ -17,13 +17,15 @@
     { "source": "/style.css", "destination": "/sitefrontend/style.css" },
     { "source": "/script.js", "destination": "/sitefrontend/script.js" },
     { "source": "/monetize.js", "destination": "/sitefrontend/monetize.js" },
+
     { "source": "/profile/:platform/:pid", "destination": "/api/profile.js?platform=:platform&pid=:pid" },
+
     { "source": "/api/profile", "destination": "/api/profile.js" },
     { "source": "/api/predict", "destination": "/api/predict.js" },
     { "source": "/api/health", "destination": "/api/health.js" }
   ],
 
   "functions": {
-    "api/profile.js": { "runtime": "nodejs20.x", "memory": 1024, "maxDuration": 30 }
+    "api/profile.js": { "runtime": "nodejs20.x", "memory": 1024, "maxDuration": 10 }
   }
 }
