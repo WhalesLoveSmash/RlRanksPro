@@ -1,48 +1,45 @@
-RlRanks.pro
-a rocket league 2v2 Rank Predictor
+# RL Ranks Pro — 2v2 Rank Predictor
 
-Small web app to project your Rocket League 2v2 rank climb. Paste your Rocket League Tracker profile, pull current MMR + recent win %, then see a projection chart of where you’ll end up.
+Small web app to project your Rocket League 2v2 rank climb.
 
-Features
+**How it works**
+- Paste your **Rocket League Tracker** profile URL.
+- A Vercel **Serverless Function** (`/api/profile.js`) scrapes the RLTracker profile page (no TRN API key).
+- We extract current **2v2 MMR** and a **recent Win%** if present.
+- Front-end projects your next games with a simple regression model and shows current + projected rank labels.
 
-Auto-fetch from RLTracker (paste your profile link).
+---
 
-Manual input fallback if fetch fails.
+## Live
+Hosted on **rlranks.pro** (non-www enforced).
 
-Projection settings: number of games and regression toward 50% win rate.
+---
 
-Chart output: game-by-game MMR projection.
+## Stack
+- **Frontend:** HTML + CSS + Vanilla JS (`index.html`, `style.css`, `script.js`)
+- **Backend (serverless):** Node 18 on Vercel (`/api/profile.js`, `/api/predict.js`, `/api/health.js`)
+- **Ranks table:** `ranks.json` (tier breakpoints + default tier width)
 
-Rank labels: shows current + projected rank/division.
+> **Note:** This project **does use a backend** for scraping. The old “no backend needed” line was incorrect for production.
 
-Stack
+---
 
-HTML + CSS + Vanilla JS
+## Endpoints
 
-Also has an android app with same name just RlRanksPro
+### `GET /profile/:platform/:pid`
+Pretty route that rewrites to `/api/profile.js?platform=:platform&pid=:pid`.
 
-Data from Tracker Network API
+**Params**
+- `platform` — one of `steam | epic | xbox | psn`
+- `pid` — the platform identifier from your RLTracker profile URL (e.g., Steam64 or Epic name)
 
-Custom SVG chart drawing
-
-Usage
-
-Open index.html in your browser (or use Live Server).
-
-Paste your Rocket League Tracker profile URL
-
-Click Fetch Ranked 2v2.
-
-If fetch fails, open Manual backup and enter your MMR + Win %.
-
-Adjust settings → click Predict.
-
-View your projected path.
-
-hosted on RlRanks.Pro
-
-Everything runs client-side; no backend needed.
-
-License
-
-MIT
+**Response**
+```json
+{
+  "platform": "epic",
+  "pid": "RelatingWave",
+  "currentMMR": 1265,
+  "recentWinPercent": 58,
+  "source": "rocketleague.tracker.network",
+  "fetchedAt": "2025-08-29T10:00:00.000Z"
+}

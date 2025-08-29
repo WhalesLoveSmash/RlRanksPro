@@ -1,9 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
   "redirects": [
     {
-      "source": "https://www.rlranks.pro/:path*",
-      "destination": "https://rlranks.pro/:path*",
-      "permanent": true
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.rlranks.pro" }],
+      "destination": "https://rlranks.pro/$1",
+      "statusCode": 308
     }
   ],
   "functions": {
@@ -20,10 +23,8 @@
     { "src": "^/script\\.js$", "dest": "/script.js" },
     { "src": "^/monetize\\.js$", "dest": "/monetize.js" },
 
-    // Pretty URL → real API
     { "src": "^/profile/([^/]+)/(.+)$", "dest": "/api/profile.js?platform=$1&pid=$2" },
 
-    // Direct API
     { "src": "^/api/profile$", "dest": "/api/profile.js" },
     { "src": "^/api/predict$", "dest": "/api/predict.js" },
     { "src": "^/api/health$", "dest": "/api/health.js" }
