@@ -2,14 +2,63 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  />
   <title>RL Ranks Pro</title>
-  <link rel="stylesheet" href="style.css" />
+
+  <!-- Theming / PWA-ish niceties -->
+  <meta name="theme-color" content="#0b1322" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Sharing / SEO -->
+  <meta property="og:title" content="RL Ranks Pro — 2v2 Rank Predictor" />
+  <meta property="og:description" content="Enter your starting rank & division → project your path over the next N games." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://rlranks.pro/" />
+  <meta property="og:image" content="data:image/png;base64,iVBORw0KGgo=" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Perf hints -->
+  <link rel="preload" as="fetch" href="/ranks/2v2.json" crossorigin="anonymous" />
+  <link rel="preload" href="script.js" as="script" />
+  <link rel="preload" href="style.css" as="style" />
+  <link rel="dns-prefetch" href="//rlranks.pro" />
   <link rel="icon" href="data:,">
+
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="wrap">
-    <header class="top">
+  <!-- Background aurora accents (inline styles only, no CSS file edits) -->
+  <div aria-hidden="true" style="
+      position:fixed; inset:auto auto 10% -8%;
+      width:min(60vw,700px); height:min(60vw,700px);
+      filter:blur(60px); opacity:.20; pointer-events:none;
+      background:radial-gradient(45% 45% at 50% 50%, rgba(106,167,255,.8), transparent 60%);
+      transform:rotate(-18deg);
+      z-index:0;"></div>
+  <div aria-hidden="true" style="
+      position:fixed; inset: -8% -10% auto auto;
+      width:min(55vw,600px); height:min(55vw,600px);
+      filter:blur(70px); opacity:.16; pointer-events:none;
+      background:radial-gradient(45% 45% at 50% 50%, rgba(107,211,138,.7), transparent 62%);
+      transform:rotate(14deg);
+      z-index:0;"></div>
+
+  <main class="wrap" style="position:relative; z-index:1;">
+    <header class="top" style="position:relative;">
+      <!-- Subtle header shine -->
+      <div aria-hidden="true" style="
+          position:absolute; inset:-20% -10% auto -10%;
+          height:120px; filter:blur(22px); opacity:.25; pointer-events:none;
+          background:
+            radial-gradient(60% 80% at 40% 0%, rgba(106,167,255,.35), transparent 60%),
+            radial-gradient(50% 70% at 70% 0%, rgba(255,255,255,.08), transparent 60%);
+        "></div>
+
       <h1>2v2 Rank Predictor</h1>
       <p class="sub">Enter your starting rank &amp; division → project your path over the next N games.</p>
     </header>
@@ -20,14 +69,14 @@
       <div class="grid">
         <label>
           Start Rank
-          <select id="rank" aria-label="Start Rank" disabled>
+          <select id="rank" aria-label="Start Rank" disabled autocomplete="off">
             <option>Loading…</option>
           </select>
         </label>
 
         <label>
           Start Division
-          <select id="div" aria-label="Start Division" disabled>
+          <select id="div" aria-label="Start Division" disabled autocomplete="off">
             <option>—</option>
           </select>
           <small>Divisions increase I → IV. SSL has one division.</small>
@@ -35,12 +84,14 @@
 
         <label>
           Games to project
-          <input id="games" type="number" min="1" max="200" value="50" />
+          <input id="games" type="number" min="1" max="200" value="50"
+                 inputmode="numeric" enterkeyhint="go" autocomplete="off" />
         </label>
 
         <label>
           Recent Win %
-          <input id="win" type="number" min="0" max="100" placeholder="optional" />
+          <input id="win" type="number" min="0" max="100" placeholder="optional"
+                 inputmode="decimal" enterkeyhint="go" autocomplete="off" />
           <small>Leave blank to use the model’s base win rate.</small>
         </label>
 
@@ -57,23 +108,28 @@
           <summary>Advanced · MMR override (optional)</summary>
           <label>
             Exact current 2v2 MMR
-            <input id="mmrOverride" type="number" min="-100" max="4000" placeholder="If set, overrides rank/div midpoint" />
+            <input id="mmrOverride" type="number" min="-100" max="4000"
+                   placeholder="If set, overrides rank/div midpoint"
+                   inputmode="numeric" enterkeyhint="go" autocomplete="off" />
           </label>
         </details>
 
         <label class="full">
           Display name (optional)
-          <input id="name" placeholder="Shown in the header only" />
+          <input id="name" placeholder="Shown in the header only"
+                 maxlength="40" enterkeyhint="go" autocomplete="off" />
         </label>
       </div>
 
       <div class="actions">
-        <button id="btnPredict" class="primary">Predict</button>
+        <!-- accesskey boosts desktop power users; aria-controls ties to results -->
+        <button id="btnPredict" class="primary"
+                accesskey="p" aria-controls="out" title="Predict (Alt/Option+Shift+P)">Predict</button>
       </div>
     </section>
 
     <!-- OUTPUT -->
-    <section id="out" class="card hide">
+    <section id="out" class="card hide" aria-live="polite" aria-atomic="false">
       <div class="head">
         <h2 id="title">2v2 Doubles</h2>
 
@@ -95,8 +151,12 @@
       </div>
 
       <div class="chart">
-        <svg id="svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Projected MMR over games"></svg>
-        <div class="axis">
+        <!-- Inline fallback stroke so SR/assistive tech has label; JS still owns visuals -->
+        <svg id="svg" viewBox="0 0 800 320" preserveAspectRatio="none"
+             aria-label="Projected MMR over games" role="img">
+          <!-- Path/defs are injected by JS -->
+        </svg>
+        <div class="axis" aria-hidden="true">
           <span id="x0">0</span>
           <span id="xMid">—</span>
           <span id="xMax">—</span>
@@ -128,12 +188,19 @@
   </main>
 
   <!-- AI Button -->
-  <button id="aiBtn" class="ai-fab" title="Ask AI">
-    <span class="ai-glow"></span>
+  <button id="aiBtn" class="ai-fab" title="Ask AI" accesskey="a" aria-label="Ask AI">
+    <span class="ai-glow" aria-hidden="true"></span>
     <span>Ask&nbsp;AI</span>
   </button>
 
-  <div id="tooltip" class="tooltip hide"></div>
+  <!-- Tooltip (announced politely when shown) -->
+  <div id="tooltip" class="tooltip hide" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <div class="card" role="alert" style="max-width:960px;margin:12px auto">
+      JavaScript is required to run the projection and chart. Please enable JavaScript.
+    </div>
+  </noscript>
 
   <script src="script.js"></script>
   <script src="monetize.js"></script>
