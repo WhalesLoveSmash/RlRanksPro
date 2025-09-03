@@ -10,11 +10,17 @@ const DEFAULTS = {
   regress: 14
 };
 
+/* Visual timing */
+const COMET_RUN_MS = 3600;      // how long the comet moves before fading
+const AI_CRESCENDO_MS = 4200;   // when Ask AI ramps up after Predict
+const TITLE_SEPARATOR = "   ";  // replace em-dash in header with spaces
+
 /* ---------------------------------- State ----------------------------------- */
 let RANKS = null;          // { rank: { div: {min,max} } }
 let LAST_STATE = null;     // for Explain tooltip
 let cometRAF = null;       // chart comet anim
 let gradTimer = null;      // gradient shimmer timer
+let aiCrescTimer = null;   // Ask AI “go supernova” timer
 
 /* ----------------------------------- DOM ------------------------------------ */
 const rankSel = document.getElementById("rank");
@@ -66,6 +72,7 @@ injectDynamicStyles(); // stronger AI glow + micro animations
     RANKS = await res.json();
     populateRankSelectWithDefaults();
     armAIButton();
+
     // Enter submits anywhere
     document.addEventListener("keydown", (e)=>{
       if(e.key === "Enter" && !e.shiftKey){
@@ -73,6 +80,13 @@ injectDynamicStyles(); // stronger AI glow + micro animations
         btnPredict.click();
       }
     });
+
+    // Any input change = cool down AI so Predict regains focus momentarily
+    [rankSel, divSel, elGames, elWin, elReg, elMMROverride, elName].forEach(el=>{
+      el.addEventListener("input", aiCooldown);
+      el.addEventListener("change", aiCooldown);
+    });
+
   }catch(err){
     console.error(err);
     rankSel.innerHTML = `<option>Error loading ranks</option>`;
@@ -146,9 +160,8 @@ function bucketFromMMR(m){
 
 function labelRank(b){ return `${b.rank} ${b.rank==='Supersonic Legend'?'':roman(b.div)} (${b.min}–${b.max})`; }
 
-/* Rank-aware default WR: gives a lively curve w/o user typing. */
+/* Rank-aware default WR: lively curve w/o typing. */
 function defaultWinPctFor(rankText){
-  // Map tiers → slightly higher default; gently tapers for higher tiers.
   const tiers = [
     "Bronze","Silver","Gold","Platinum","Diamond","Champion","Grand Champion","Supersonic Legend"
   ];
@@ -246,7 +259,7 @@ function drawSeries(series){
    // main path (with solid under-stroke so the curve is visible even if gradient/defs race)
   const d = series.map((v,i)=> `${i?'L':'M'} ${xScale(i)} ${yScale(v)}`).join(' ');
 
-  // PATCH A — faint solid under-stroke (draws immediately)
+  // Faint solid under-stroke (draws immediately)
   const under = document.createElementNS("http://www.w3.org/2000/svg","path");
   under.setAttribute("d", d);
   under.setAttribute("fill", "none");
@@ -267,7 +280,7 @@ function drawSeries(series){
   svg.appendChild(path);
   requestAnimationFrame(()=> path.setAttribute("stroke", "url(#mmrGrad)")); // swap to gradient
 
-  // animated draw-in (animate both, under-stroke more subtle)
+  // animated draw-in (animate both, under-stroke subtle)
   const ulen = under.getTotalLength();
   under.style.strokeDasharray = `${ulen}`;
   under.style.strokeDashoffset = `${ulen}`;
@@ -296,36 +309,45 @@ function drawSeries(series){
   m1.setAttribute("r", 7); m1.setAttribute("class","projMark");
   svg.appendChild(m1);
 
-  // comet
-  addComet(path);
+  // comet (moves briefly, then stops & fades)
+  addComet(path, COMET_RUN_MS);
 
   x0.textContent = 0;
   xMid.textContent = Math.floor((series.length-1)/2);
   xMax.textContent = series.length-1;
 }
 
-function addComet(path){
+function addComet(path, stopAfterMs=3200){
   if(cometRAF) cancelAnimationFrame(cometRAF);
   const comet = document.createElementNS("http://www.w3.org/2000/svg","circle");
   comet.setAttribute("r","5");
   comet.setAttribute("fill","#6aa7ff");
-  comet.setAttribute("opacity","0.9");
+  comet.setAttribute("opacity","0.95");
   comet.setAttribute("filter","url(#mmrGlow)");
   svg.appendChild(comet);
 
   const total = path.getTotalLength();
   let t = 0;
-  const start = total*0.4;
+  const startLen = total*0.4;
+  const t0 = performance.now();
 
-  const loop = () => {
+  const loop = (now) => {
+    const elapsed = now - t0;
+    if (elapsed >= stopAfterMs){
+      // Fade out & stop cleanly
+      comet.style.transition = "opacity 700ms ease";
+      comet.style.opacity = "0";
+      setTimeout(()=> comet.remove(), 720);
+      return;
+    }
     t += 0.012;
-    const l = start + ((Math.sin(t)+1)/2) * (total - start);
+    const l = startLen + ((Math.sin(t)+1)/2) * (total - startLen);
     const pt = path.getPointAtLength(l);
     comet.setAttribute("cx", pt.x);
     comet.setAttribute("cy", pt.y);
     cometRAF = requestAnimationFrame(loop);
   };
-  loop();
+  cometRAF = requestAnimationFrame(loop);
 }
 
 /* ---------------------------- Ladder & Tooltip ------------------------------- */
@@ -422,11 +444,16 @@ btnPredict.addEventListener("click", ()=>{
   updateLadder(currB, startMMR, projLabel, projBucket, finalMMR);
   drawSeries(mmrSeries);
 
-  title.textContent = name ? `${name} — 2v2 Doubles` : `2v2 Doubles`;
+  title.textContent = name ? `${name}${TITLE_SEPARATOR}2v2 Doubles` : `2v2 Doubles`;
   out.classList.remove("hide");
 
   // Smooth center on results
   setTimeout(()=> centerOn(out), 120);
+
+  // Stage Ask AI: cool → SUPER after they watch the chart for a bit
+  aiCooldown();
+  clearTimeout(aiCrescTimer);
+  aiCrescTimer = setTimeout(aiCrescendo, AI_CRESCENDO_MS);
 
   btnPredict.disabled = false; btnPredict.textContent = restore;
 });
@@ -483,28 +510,57 @@ function armAIButton(){
     setTimeout(()=> aiBtn.classList.remove("ai-press"), 220);
   });
 }
+function aiCooldown(){
+  aiBtn.classList.remove("ai-crescendo");
+  aiBtn.classList.add("ai-cool");
+}
+function aiCrescendo(){
+  aiBtn.classList.remove("ai-cool");
+  aiBtn.classList.add("ai-crescendo");
+}
 
 /* --------------------------- Dynamic CSS Injection -------------------------- */
 function injectDynamicStyles(){
   const css = `
-    /* AI button extra glow & ping */
-    #aiBtn{ position:fixed; }
+    /* Always sit above content (paywalls can still top this via higher z-index) */
+    #aiBtn{ position:fixed; z-index:2147483000; }
+
+    /* Extra press feedback */
     #aiBtn::after{
       content:""; position:absolute; inset:0; border-radius:16px; pointer-events:none;
       box-shadow:0 0 24px rgba(106,167,255,.35), 0 0 48px rgba(106,167,255,.18);
       transition:filter .25s ease, transform .2s ease;
     }
     #aiBtn.ai-press::after{ filter:brightness(1.25); transform:scale(1.02); }
-    #aiBtn::before{
-      content:""; position:absolute; left:50%; top:50%; width:14px; height:14px; border-radius:999px;
-      transform:translate(-50%,-50%); box-shadow:0 0 22px rgba(106,167,255,.85);
+
+    /* Idle ping (subtle when user is editing) */
+    #aiBtn.ai-cool::before{
+      content:""; position:absolute; left:50%; top:50%; width:12px; height:12px; border-radius:999px;
+      transform:translate(-50%,-50%); box-shadow:0 0 18px rgba(255,210,70,.45);
       animation:aiPing 2.6s ease-out infinite;
-      background:rgba(106,167,255,.28); filter:blur(2px);
+      background:rgba(255,210,70,.28); filter:blur(2px);
     }
+
+    /* Crescendo: insane diamond glow */
+    #aiBtn.ai-crescendo{
+      box-shadow:0 26px 64px rgba(0,0,0,.7), 0 0 85px rgba(255,220,90,1), 0 0 160px rgba(255,220,90,.6) !important;
+      animation: aiBossJS 2.6s ease-in-out infinite;
+    }
+    @keyframes aiBossJS{
+      0%,100%{ transform:translateY(0); }
+      50%{ transform:translateY(-1px); }
+    }
+
     @keyframes aiPing{
       0%{ opacity:.75; transform:translate(-50%,-50%) scale(1); }
       70%{ opacity:0; transform:translate(-50%,-50%) scale(3.2); }
       100%{ opacity:0; transform:translate(-50%,-50%) scale(3.2); }
+    }
+
+    /* Reduced motion: keep glow intensity; stop movement */
+    @media (prefers-reduced-motion: reduce){
+      #aiBtn{ animation:none !important; }
+      #aiBtn::before{ display:none !important; }
     }
   `;
   const tag = document.createElement("style");
