@@ -2,6 +2,14 @@
 const BASE_WIN = 10, BASE_LOSS = 10;
 const RANKS_URL = "/ranks/2v2.json"; // served by vercel rewrite
 
+/* Smart defaults for "open → hit Enter" */
+const DEFAULTS = {
+  rank: "Diamond II",
+  div: "2",
+  games: 50,
+  regress: 14
+};
+
 /* ---------------------------------- State ----------------------------------- */
 let RANKS = null;          // { rank: { div: {min,max} } }
 let LAST_STATE = null;     // for Explain tooltip
@@ -49,15 +57,22 @@ const mmrDelta = document.getElementById("mmrDelta");
 const aiBtn = document.getElementById("aiBtn");
 
 /* ------------------------------- Init & Styles ------------------------------ */
-injectDynamicStyles(); // stronger AI glow + a few micro animations
+injectDynamicStyles(); // stronger AI glow + micro animations
 
 (async function init(){
   try{
     const res = await fetch(RANKS_URL);
     if(!res.ok) throw new Error("Failed to load ranks");
     RANKS = await res.json();
-    populateRankSelect();
+    populateRankSelectWithDefaults();
     armAIButton();
+    // Enter submits anywhere
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" && !e.shiftKey){
+        e.preventDefault();
+        btnPredict.click();
+      }
+    });
   }catch(err){
     console.error(err);
     rankSel.innerHTML = `<option>Error loading ranks</option>`;
@@ -65,16 +80,25 @@ injectDynamicStyles(); // stronger AI glow + a few micro animations
 })();
 
 /* ------------------------------ Rank population ----------------------------- */
-function populateRankSelect(){
+function populateRankSelectWithDefaults(){
   rankSel.innerHTML = "";
-  Object.keys(RANKS).forEach(r=>{
+  const ranks = Object.keys(RANKS);
+  ranks.forEach(r=>{
     const opt = document.createElement("option");
     opt.value = r; opt.textContent = r;
     rankSel.appendChild(opt);
   });
   rankSel.disabled = false;
+
+  // Prefer our “looks good” default if present, else center rank
+  rankSel.value = ranks.includes(DEFAULTS.rank) ? DEFAULTS.rank : ranks[Math.floor(ranks.length/2)];
   updateDivSelect();
+
+  // Default div if present, else mid div
+  const divs = Object.keys(RANKS[rankSel.value]).sort((a,b)=>Number(a)-Number(b));
+  divSel.value = divs.includes(DEFAULTS.div) ? DEFAULTS.div : divs[Math.floor(divs.length/2)];
 }
+
 function updateDivSelect(){
   divSel.innerHTML = "";
   const rank = rankSel.value;
@@ -121,6 +145,18 @@ function bucketFromMMR(m){
 }
 
 function labelRank(b){ return `${b.rank} ${b.rank==='Supersonic Legend'?'':roman(b.div)} (${b.min}–${b.max})`; }
+
+/* Rank-aware default WR: gives a lively curve w/o user typing. */
+function defaultWinPctFor(rankText){
+  // Map tiers → slightly higher default; gently tapers for higher tiers.
+  const tiers = [
+    "Bronze","Silver","Gold","Platinum","Diamond","Champion","Grand Champion","Supersonic Legend"
+  ];
+  const tier = tiers.find(t => rankText.startsWith(t)) || "Diamond";
+  const idx = Math.max(0, tiers.indexOf(tier));           // 0..7
+  const base = 60 - idx*1.5;                              // ~60 → ~49.5
+  return Math.max(51, Math.min(60, base));                // clamp 51–60
+}
 
 /* -------------------------------- Simulation -------------------------------- */
 function simulateSeries(start, winPct, games, regressPercent){
@@ -288,7 +324,6 @@ function updateLadder(currentBucket, startMMR, projLabel, projBucket, finalMMR){
   if(delta > 0){ tileProjected.classList.add('up'); ladderArrow.classList.add('up'); }
   else if(delta < 0){ tileProjected.classList.add('down'); ladderArrow.classList.add('down'); }
 
-  // quick flash
   flashBox(tileProjected);
 }
 
@@ -327,13 +362,14 @@ btnPredict.addEventListener("click", ()=>{
   const d = divSel.value;
   const band = RANKS[r][d];
 
+  // Robust defaults if fields are blank
   const startMMR = elMMROverride.value ? Number(elMMROverride.value) : midpoint(band);
-  const games = Number(elGames.value||50);
-  const reg   = Number(elReg.value||14);
-  const winPct = elWin.value ? Number(elWin.value) : NaN;
+  const games = Number(elGames.value || DEFAULTS.games);
+  const reg   = Number(elReg.value   || DEFAULTS.regress);
+  const usedWinPct = elWin.value !== "" ? Number(elWin.value) : defaultWinPctFor(r);
   const name = (elName.value||"").trim();
 
-  const { mmrSeries, wrSeries } = simulateSeries(startMMR, isNaN(winPct)?50:winPct, games, reg);
+  const { mmrSeries, wrSeries } = simulateSeries(startMMR, usedWinPct, games, reg);
   const finalMMR = mmrSeries.at(-1);
 
   // current
@@ -341,7 +377,7 @@ btnPredict.addEventListener("click", ()=>{
   const currB = currState.kind==='inside' ? currState.bucket : (currState.lower || currState.upper);
   currRank.textContent = labelRank(currB);
   animateCount(currMMR, startMMR, 420);
-  animateCount(currWR, (isNaN(winPct)?50:winPct), 420, v=>`${v.toFixed(0)}`);
+  animateCount(currWR, usedWinPct, 420, v=>`${v.toFixed(0)}`);
 
   // projected
   const state = bucketFromMMR(finalMMR);
@@ -367,7 +403,7 @@ btnPredict.addEventListener("click", ()=>{
   title.textContent = name ? `${name} — 2v2 Doubles` : `2v2 Doubles`;
   out.classList.remove("hide");
 
-  // smooth center on results (mobile + desktop)
+  // Smooth center on results
   setTimeout(()=> centerOn(out), 120);
 
   btnPredict.disabled = false; btnPredict.textContent = restore;
@@ -375,7 +411,7 @@ btnPredict.addEventListener("click", ()=>{
 
 /* ---------------------------- Micro-interactions ---------------------------- */
 elReg.addEventListener("input", ()=>{
-  const v = Number(elReg.value);
+  const v = Number(elReg.value || DEFAULTS.regress);
   elRegTag.textContent = `${v}% • ${v>=60?"harsh":v>=30?"medium":"gentle"}`;
 });
 
@@ -421,7 +457,6 @@ function armAIButton(){
        <em>Example:</em> “New monitor but I have a headache — can I keep D2?”<br>
        <strong>3 free</strong> Qs · Premium unlock after.`
     );
-    // small press flash
     aiBtn.classList.add("ai-press");
     setTimeout(()=> aiBtn.classList.remove("ai-press"), 220);
   });
