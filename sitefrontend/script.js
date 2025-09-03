@@ -243,17 +243,39 @@ function drawSeries(series){
     svg.appendChild(line);
   }
 
-  // main path
+   // main path (with solid under-stroke so the curve is visible even if gradient/defs race)
   const d = series.map((v,i)=> `${i?'L':'M'} ${xScale(i)} ${yScale(v)}`).join(' ');
+
+  // PATCH A — faint solid under-stroke (draws immediately)
+  const under = document.createElementNS("http://www.w3.org/2000/svg","path");
+  under.setAttribute("d", d);
+  under.setAttribute("fill", "none");
+  under.setAttribute("stroke", "#6bd38a");
+  under.setAttribute("stroke-opacity", ".35");
+  under.setAttribute("stroke-width", "3.5");
+  under.setAttribute("stroke-linecap", "round");
+  under.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(under);
+
+  // Main stroke starts solid, then swaps to gradient next frame (after <defs> is ready)
   const path = document.createElementNS("http://www.w3.org/2000/svg","path");
   path.setAttribute("d", d);
-  path.setAttribute("fill","none");
-  path.setAttribute("stroke","url(#mmrGrad)");
-  path.setAttribute("stroke-width","4.5");
-  path.setAttribute("filter","url(#mmrGlow)");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#6bd38a");            // immediate visible stroke
+  path.setAttribute("stroke-width", "4.5");
+  path.setAttribute("filter", "url(#mmrGlow)");
   svg.appendChild(path);
+  requestAnimationFrame(()=> path.setAttribute("stroke", "url(#mmrGrad)")); // swap to gradient
 
-  // animated draw
+  // animated draw-in (animate both, under-stroke more subtle)
+  const ulen = under.getTotalLength();
+  under.style.strokeDasharray = `${ulen}`;
+  under.style.strokeDashoffset = `${ulen}`;
+  requestAnimationFrame(()=>{
+    under.style.transition = "stroke-dashoffset 900ms ease";
+    under.style.strokeDashoffset = "0";
+  });
+
   const len = path.getTotalLength();
   path.style.strokeDasharray = `${len}`;
   path.style.strokeDashoffset = `${len}`;
