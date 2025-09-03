@@ -18,10 +18,6 @@
     { "source": "/script.js", "destination": "/sitefrontend/script.js" },
     { "source": "/monetize.js", "destination": "/sitefrontend/monetize.js" },
 
-    { "source": "/profile/:platform/:pid", "destination": "/api/profile.js?platform=:platform&pid=:pid" },
-
-    { "source": "/api/profile", "destination": "/api/profile.js" },
-    { "source": "/api/predict", "destination": "/api/predict.js" },
-    { "source": "/api/health", "destination": "/api/health.js" }
+    { "source": "/ranks/2v2.json", "destination": "/sitefrontend/ranks/2v2.json" }
   ]
 }

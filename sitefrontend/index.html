@@ -11,62 +11,54 @@
   <main class="wrap">
     <header class="top">
       <h1>2v2 Rank Predictor</h1>
-      <p class="sub">Current MMR + projected path over the next N games.</p>
-      <p class="sub">Paste your RLTracker profile → pull current MMR + recent Win% → see the projected path.</p>
+      <p class="sub">Enter your starting rank &amp; division → project your path over the next N games.</p>
     </header>
 
-    <!-- STEP 1: FETCH -->
+    <!-- STEP 1 -->
     <section class="card">
-      <h2 class="step">Step 1 · Fetch from RLTracker</h2>
-
-      <div class="fetch-grid">
-        <label class="full">
-          RLTracker URL <span class="alt">or just your Steam name</span>
-          <input id="trackerInput"
-                 placeholder="https://rocketleague.tracker.network/rocket-league/profile/steam/WhalesLoveSmash/overview  •  or  •  WhalesLoveSmash" />
-          <small>If only a name is entered, it uses <code>/profile/steam/&lt;name&gt;/overview</code>.</small>
-        </label>
-        <button id="btnFetch" class="primary">Fetch Ranked 2v2</button>
-      </div>
-
-      <div id="fetchStatus" class="status hide"></div>
-
-      <details class="backup">
-        <summary>Manual backup (only if fetch fails)</summary>
-        <div class="grid">
-          <label>
-            Current 2v2 MMR
-            <input id="mmr" type="number" min="-100" max="4000" placeholder="e.g., 1065" />
-          </label>
-          <label>
-            Recent Win %
-            <input id="win" type="number" min="0" max="100" placeholder="e.g., 58" />
-          </label>
-          <label class="full">
-            Display name (optional)
-            <input id="name" placeholder="player" />
-            <small>Shown in the header only.</small>
-          </label>
-        </div>
-      </details>
-    </section>
-
-    <!-- STEP 2: SETTINGS + PREDICT -->
-    <section class="card">
-      <h2 class="step">Step 2 · Projection settings</h2>
+      <h2 class="step">Step 1 · Starting point</h2>
       <div class="grid">
         <label>
+          Start Rank
+          <select id="rank"></select>
+        </label>
+
+        <label>
+          Start Division
+          <select id="div"></select>
+        </label>
+
+        <label>
           Games to project
-          <input id="games" type="number" min="1" max="200" value="25" />
+          <input id="games" type="number" min="1" max="200" value="50" />
+        </label>
+
+        <label>
+          Recent Win %
+          <input id="win" type="number" min="0" max="100" placeholder="optional" />
+          <small>Leave blank to use the model’s base win rate.</small>
         </label>
 
         <label class="full">
           Win% regression toward 50% as you climb
           <div class="row">
-            <input id="regress" type="range" min="0" max="100" value="30" />
-            <span id="regressTag" class="tag">30% • medium</span>
+            <input id="regress" type="range" min="0" max="100" value="14" />
+            <span id="regressTag" class="tag">14% • gentle</span>
           </div>
-          <small>0% = never regresses (optimistic). 100% = snaps toward 50% very quickly (harsh).</small>
+          <small>0% = never regresses. 100% = snaps toward 50% very quickly.</small>
+        </label>
+
+        <details class="full backup">
+          <summary>Advanced · MMR override (optional)</summary>
+          <label>
+            Exact current 2v2 MMR
+            <input id="mmrOverride" type="number" min="-100" max="4000" placeholder="If set, overrides rank/div midpoint" />
+          </label>
+        </details>
+
+        <label class="full">
+          Display name (optional)
+          <input id="name" placeholder="Shown in the header only" />
         </label>
       </div>
 
@@ -79,14 +71,17 @@
     <section id="out" class="card hide">
       <div class="head">
         <h2 id="title">2v2 Doubles</h2>
+
         <div class="badges">
           <div class="badge">
             <div class="k">Current</div>
             <div class="v" id="currRank">—</div>
             <div class="s"><span id="currMMR">—</span> MMR · <span id="currWR">—</span>% WR</div>
           </div>
-          <div class="badge">
-            <div class="k">Projected</div>
+          <div class="badge" id="projBadge">
+            <div class="k">Projected 
+              <button id="explain" class="ghost tiny" aria-label="Explain">?</button>
+            </div>
             <div class="v" id="projRank">—</div>
             <div class="s"><span id="projMMR">—</span> MMR · <span id="projWR">—</span>% WR (final)</div>
           </div>
@@ -101,12 +96,37 @@
           <span id="xMax">—</span>
         </div>
       </div>
+
+      <!-- LADDER -->
+      <div class="ladder" aria-label="Rank jump">
+        <div class="rank-tile current">
+          <div class="rank-name" id="tileCurrName">—</div>
+          <div class="rank-range" id="tileCurrRange">—</div>
+        </div>
+
+        <div class="jump">
+          <div class="arrow" id="ladderArrow"></div>
+          <div class="delta" id="mmrDelta">+0</div>
+        </div>
+
+        <div class="rank-tile projected" id="tileProjected">
+          <div class="rank-name" id="tileProjName">—</div>
+          <div class="rank-range" id="tileProjRange">—</div>
+        </div>
+      </div>
     </section>
 
     <footer class="foot">
-      <small>“Fetch” targets the <strong>Ranked Doubles 2v2</strong> block. Manual fields are a fallback.</small>
+      <small>Divisions increase from I → IV. Supersonic Legend has one division.</small>
     </footer>
   </main>
+
+  <!-- AI Button -->
+  <button id="aiBtn" class="ai-fab" title="Ask AI">
+    <span>Ask&nbsp;AI</span>
+  </button>
+
+  <div id="tooltip" class="tooltip hide"></div>
 
   <script src="script.js"></script>
   <script src="monetize.js"></script>
