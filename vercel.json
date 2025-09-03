@@ -18,6 +18,22 @@
     { "source": "/script.js", "destination": "/sitefrontend/script.js" },
     { "source": "/monetize.js", "destination": "/sitefrontend/monetize.js" },
 
+    { "source": "/sw.js", "destination": "/sitefrontend/sw.js" },
+    { "source": "/sw-register.js", "destination": "/sitefrontend/sw-register.js" },
+
+    { "source": "/site.webmanifest", "destination": "/sitefrontend/site.webmanifest" },
+    { "source": "/icons/(.*)", "destination": "/sitefrontend/icons/$1" },
+    { "source": "/og-card.svg", "destination": "/sitefrontend/og-card.svg" },
+
+    { "source": "/.well-known/assetlinks.json", "destination": "/sitefrontend/.well-known/assetlinks.json" },
+
     { "source": "/ranks/2v2.json", "destination": "/sitefrontend/ranks/2v2.json" }
+  ],
+
+  "headers": [
+    {
+      "source": "/site.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" }]
+    }
   ]
 }

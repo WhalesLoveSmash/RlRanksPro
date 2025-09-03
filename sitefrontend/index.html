@@ -5,34 +5,34 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>RL Ranks Pro</title>
 
-  <!-- theming/perf/meta -->
+  <!-- PWA / install -->
   <meta name="theme-color" content="#0b1322" />
   <meta name="color-scheme" content="dark" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="icon" href="/icons/spark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icons/spark-192.png" />
+
+  <!-- Social preview -->
   <meta property="og:title" content="RL Ranks Pro — 2v2 Rank Predictor" />
   <meta property="og:description" content="Enter your starting rank & division → project your path over the next N games." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://rlranks.pro/" />
-  <meta property="og:image" content="data:image/png;base64,iVBORw0KGgo=" />
+  <meta property="og:image" content="https://rlranks.pro/og-card.svg" />
   <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Perf hints -->
   <link rel="preload" as="fetch" href="/ranks/2v2.json" crossorigin="anonymous" />
-  <link rel="preload" href="script.js" as="script" />
-  <link rel="preload" href="style.css" as="style" />
-  <link rel="dns-prefetch" href="//rlranks.pro" />
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="style.css" />
+  <link rel="preload" href="/script.js" as="script" />
+  <link rel="preload" href="/style.css" as="style" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <!-- ambient auroras (purely decorative) -->
-  <div aria-hidden="true" style="position:fixed;inset:auto auto 10% -8%;width:min(60vw,700px);height:min(60vw,700px);filter:blur(60px);opacity:.18;pointer-events:none;background:radial-gradient(45% 45% at 50% 50%, rgba(106,167,255,.85), transparent 60%);transform:rotate(-18deg);z-index:0;"></div>
-  <div aria-hidden="true" style="position:fixed;inset:-8% -10% auto auto;width:min(55vw,600px);height:min(55vw,600px);filter:blur(70px);opacity:.14;pointer-events:none;background:radial-gradient(45% 45% at 50% 50%, rgba(107,211,138,.75), transparent 62%);transform:rotate(14deg);z-index:0;"></div>
-
-  <main class="wrap" style="position:relative;z-index:1;">
-    <header class="top" style="position:relative;">
-      <div aria-hidden="true" style="position:absolute;inset:-20% -10% auto -10%;height:120px;filter:blur(22px);opacity:.25;pointer-events:none;background:
-            radial-gradient(60% 80% at 40% 0%, rgba(106,167,255,.35), transparent 60%),
-            radial-gradient(50% 70% at 70% 0%, rgba(255,255,255,.08), transparent 60%);"></div>
+  <main class="wrap">
+    <header class="top">
       <h1>2v2 Rank Predictor</h1>
       <p class="sub">Enter your starting rank &amp; division → project your path over the next N games.</p>
     </header>
@@ -109,7 +109,6 @@
           <div class="badge" id="projBadge">
             <div class="k">
               Projected
-              <!-- keep button; show sleek info symbol character -->
               <button id="explain" class="ghost tiny" aria-label="Explain">ℹ︎</button>
             </div>
             <div class="v" id="projRank">—</div>
@@ -151,8 +150,8 @@
     </footer>
   </main>
 
-  <!-- Ask AI (dominant, always above content; monetization/modal can top it later) -->
-  <button id="aiBtn" class="ai-fab" title="Ask AI" accesskey="a" aria-label="Ask AI" style="z-index:2147483000">
+  <!-- Ask AI FAB -->
+  <button id="aiBtn" class="ai-fab" title="Ask AI" accesskey="a" aria-label="Ask AI">
     <span class="ai-glow" aria-hidden="true"></span>
     <span>Ask&nbsp;AI</span>
   </button>
@@ -165,7 +164,9 @@
     </div>
   </noscript>
 
-  <script src="script.js"></script>
-  <script src="monetize.js"></script>
+  <!-- Scripts -->
+  <script src="/script.js"></script>
+  <script src="/monetize.js"></script>
+  <script src="/sw-register.js"></script>
 </body>
 </html>
