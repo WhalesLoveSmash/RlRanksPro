@@ -30,9 +30,8 @@
   <!-- Styles -->
   <link rel="stylesheet" href="/style.css" />
 
-  <!-- Tiny inline styles for the full-screen Ask AI placeholder (keeps your CSS file untouched) -->
+  <!-- Inline styles for Ask AI overlay -->
   <style>
-    /* Full-screen overlay shown with #hash :target (no JS) */
     .ai-overlay {
       position: fixed; inset: 0; display: none;
       background:
@@ -75,7 +74,6 @@
       background: transparent; color: #cbd6ff; border-color: rgba(255,255,255,.12);
     }
     .ai-close { position: absolute; top: 10px; right: 14px; }
-    /* Hide the small footer line entirely (per your request) */
     footer.foot { display: none; }
   </style>
 </head>
@@ -194,34 +192,30 @@
       </div>
     </section>
 
-    <!-- Footer text removed (kept node for layout but hidden via inline CSS above) -->
-    <footer class="foot">
-      <small>Divisions increase from I → IV. Supersonic Legend has one division.</small>
-    </footer>
+    <footer class="foot"></footer>
   </main>
 
   <!-- Ask AI FAB -->
-  <!-- Keep the same id so your JS still binds; href opens the no-JS overlay as a placeholder -->
   <a id="aiBtn" href="#ai-overlay" class="ai-fab" role="button" title="Ask AI" accesskey="a" aria-label="Ask AI">
     <span class="ai-glow" aria-hidden="true"></span>
     <span>Ask&nbsp;AI</span>
   </a>
 
-  <!-- Full-screen placeholder (no JS; :target shows it). Replace with real AI UI later. -->
+  <!-- Ask AI Overlay -->
   <div id="ai-overlay" class="ai-overlay" aria-modal="true" role="dialog">
     <div class="ai-sheet">
       <a href="#" class="ai-ghost ai-close" aria-label="Close">Close</a>
       <div class="ai-card">
-        <h3>Ask AI (Coming Soon)</h3>
-        <p>We’re about to make this a full-screen assistant that factors your context into the projection.</p>
+        <h3>Ask AI (Not Live Yet)</h3>
+        <p>This is gonna be a full screen assistant that reacts to your real life chaos.</p>
         <p style="opacity:.75;margin-top:10px">Example prompts:</p>
         <ul style="margin:6px 0 0 18px; opacity:.9">
-          <li>“New monitor, slight headache — can I keep D2?”</li>
-          <li>“If my win% dips to 52% after 20 games, where do I land?”</li>
-          <li>“Sim with teammates rotating — moderate comms.”</li>
+          <li>New monitor slight headache can I keep D2?</li>
+          <li>Three hours of sleep and an energy drink am I still holding this rank?</li>
+          <li>Teammates fighting in voice chat what happens to my climb?</li>
         </ul>
         <div class="ai-actions">
-          <a href="#" class="ai-primary" aria-label="Close and return">Got it</a>
+          <a href="#" class="ai-primary" aria-label="Close and return">Lock it in</a>
           <a href="#" class="ai-ghost" aria-label="Close">Close</a>
         </div>
       </div>
