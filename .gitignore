@@ -1,0 +1,39 @@
+# === Node.js / Vercel ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env
+.vercel
+
+# Ignore compiled / generated builds but keep source
+dist/
+out/
+.cache/
+.next/
+*.log
+
+# === Android / Gradle ===
+# Ignore generated files
+android/.gradle/
+android/app/build/
+android/build/
+.gradle/
+**/build/
+
+# Local properties (machine-specific)
+local.properties
+
+# Android Studio project files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# === System junk ===
+.DS_Store
+Thumbs.db
+
+# === VS Code ===
+.vscode/
