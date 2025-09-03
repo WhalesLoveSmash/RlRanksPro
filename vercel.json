@@ -24,6 +24,8 @@
     { "source": "/sw-register.js", "destination": "/sitefrontend/sw-register.js" },
 
     { "source": "/icons/:path*", "destination": "/sitefrontend/icons/:path*" },
-    { "source": "/.well-known/assetlinks.json", "destination": "/sitefrontend/.well-known/assetlinks.json" }
+    { "source": "/.well-known/assetlinks.json", "destination": "/sitefrontend/.well-known/assetlinks.json" },
+
+    { "source": "/privacy", "destination": "/sitefrontend/privacy.html" }
   ]
 }
