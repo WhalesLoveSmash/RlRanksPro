@@ -20,12 +20,17 @@
       <div class="grid">
         <label>
           Start Rank
-          <select id="rank"></select>
+          <select id="rank" aria-label="Start Rank" disabled>
+            <option>Loading…</option>
+          </select>
         </label>
 
         <label>
           Start Division
-          <select id="div"></select>
+          <select id="div" aria-label="Start Division" disabled>
+            <option>—</option>
+          </select>
+          <small>Divisions increase I → IV. SSL has one division.</small>
         </label>
 
         <label>
@@ -79,7 +84,8 @@
             <div class="s"><span id="currMMR">—</span> MMR · <span id="currWR">—</span>% WR</div>
           </div>
           <div class="badge" id="projBadge">
-            <div class="k">Projected 
+            <div class="k">
+              Projected
               <button id="explain" class="ghost tiny" aria-label="Explain">?</button>
             </div>
             <div class="v" id="projRank">—</div>
@@ -123,6 +129,7 @@
 
   <!-- AI Button -->
   <button id="aiBtn" class="ai-fab" title="Ask AI">
+    <span class="ai-glow"></span>
     <span>Ask&nbsp;AI</span>
   </button>
 
