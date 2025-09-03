@@ -29,6 +29,55 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="/style.css" />
+
+  <!-- Tiny inline styles for the full-screen Ask AI placeholder (keeps your CSS file untouched) -->
+  <style>
+    /* Full-screen overlay shown with #hash :target (no JS) */
+    .ai-overlay {
+      position: fixed; inset: 0; display: none;
+      background:
+        radial-gradient(60% 60% at 80% 90%, rgba(255,215,120,.08), transparent 60%),
+        radial-gradient(55% 55% at 15% 10%, rgba(106,167,255,.06), transparent 60%),
+        rgba(5,10,20,.86);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      z-index: 2147483500;
+    }
+    .ai-overlay:target { display: block; }
+    .ai-sheet {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      padding: 24px;
+    }
+    .ai-card {
+      width: min(780px, 92vw); max-height: min(86vh, 720px);
+      background: linear-gradient(180deg, rgba(16,26,45,.9), rgba(10,16,28,.9));
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 20px; box-shadow: 0 20px 80px rgba(0,0,0,.45), 0 0 60px rgba(255, 213, 95, .15);
+      padding: clamp(16px, 3.2vw, 28px);
+      overflow: auto;
+    }
+    .ai-card h3 { margin: 0 0 8px; font-size: clamp(18px, 3.4vw, 22px); }
+    .ai-card p  { margin: 6px 0 0; opacity: .9; }
+    .ai-actions {
+      display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;
+    }
+    .ai-primary, .ai-ghost {
+      border-radius: 12px; padding: 10px 14px; font-weight: 600;
+      border: 1px solid transparent; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ai-primary {
+      background: linear-gradient(180deg, #ffd666, #ffbf3f);
+      color: #1b1404; border-color: rgba(0,0,0,.08);
+      box-shadow: 0 8px 24px rgba(255,191,63,.25);
+    }
+    .ai-ghost {
+      background: transparent; color: #cbd6ff; border-color: rgba(255,255,255,.12);
+    }
+    .ai-close { position: absolute; top: 10px; right: 14px; }
+    /* Hide the small footer line entirely (per your request) */
+    footer.foot { display: none; }
+  </style>
 </head>
 <body>
   <main class="wrap">
@@ -145,16 +194,39 @@
       </div>
     </section>
 
+    <!-- Footer text removed (kept node for layout but hidden via inline CSS above) -->
     <footer class="foot">
       <small>Divisions increase from I → IV. Supersonic Legend has one division.</small>
     </footer>
   </main>
 
   <!-- Ask AI FAB -->
-  <button id="aiBtn" class="ai-fab" title="Ask AI" accesskey="a" aria-label="Ask AI">
+  <!-- Keep the same id so your JS still binds; href opens the no-JS overlay as a placeholder -->
+  <a id="aiBtn" href="#ai-overlay" class="ai-fab" role="button" title="Ask AI" accesskey="a" aria-label="Ask AI">
     <span class="ai-glow" aria-hidden="true"></span>
     <span>Ask&nbsp;AI</span>
-  </button>
+  </a>
+
+  <!-- Full-screen placeholder (no JS; :target shows it). Replace with real AI UI later. -->
+  <div id="ai-overlay" class="ai-overlay" aria-modal="true" role="dialog">
+    <div class="ai-sheet">
+      <a href="#" class="ai-ghost ai-close" aria-label="Close">Close</a>
+      <div class="ai-card">
+        <h3>Ask AI (Coming Soon)</h3>
+        <p>We’re about to make this a full-screen assistant that factors your context into the projection.</p>
+        <p style="opacity:.75;margin-top:10px">Example prompts:</p>
+        <ul style="margin:6px 0 0 18px; opacity:.9">
+          <li>“New monitor, slight headache — can I keep D2?”</li>
+          <li>“If my win% dips to 52% after 20 games, where do I land?”</li>
+          <li>“Sim with teammates rotating — moderate comms.”</li>
+        </ul>
+        <div class="ai-actions">
+          <a href="#" class="ai-primary" aria-label="Close and return">Got it</a>
+          <a href="#" class="ai-ghost" aria-label="Close">Close</a>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="tooltip" class="tooltip hide" role="status" aria-live="polite"></div>
 
