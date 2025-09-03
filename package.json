@@ -1,5 +1,11 @@
 {
+  "name": "rlrankspro",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "make:icons": "node tools/make-icons.cjs"
+  },
   "devDependencies": {
-    "sharp": "^0.34.3"
+    "sharp": "^0.33.3"
   }
 }
