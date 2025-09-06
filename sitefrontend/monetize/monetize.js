@@ -1,6 +1,6 @@
 /* sitefrontend/monetize/monetize.js
  *
- * ⚠️ Dev convenience only:
+ * ⚠️ Dev convenience only: hope thiss works
  *  - You may test direct OpenAI calls by storing a key in localStorage:
  *      localStorage.setItem('rlranks_openai_key', 'sk-...');
  *    or by assigning window.MONETIZE_OPENAI_KEY = 'sk-...';
