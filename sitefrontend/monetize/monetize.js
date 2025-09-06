@@ -9,10 +9,10 @@
  */
 
 (function () {
-  const WEIGHTS_URL = '/monetize/weights.json';
+  const WEIGHTS_URL = '/sitefrontend/monetize/weights.json';
 
   // —— Toggle this ON for production once you have a backend proxy ——
-  const USE_PROXY = false;             // true -> POST to /api/ai with {messages,context}
+  const USE_PROXY = true;             // true -> POST to /api/ai with {messages,context}
   const PROXY_ENDPOINT = '/api/ai';
   // ————————————————————————————————————————————————————————————————
 
