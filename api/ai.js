@@ -1,18 +1,8 @@
 // File: api/ai.js
-// Vercel Serverless Function (Node 18 runtime) — always returns JSON.
+// Vercel Serverless Function (Node runtime) — always returns JSON.
 
-export const config = { runtime: "nodejs18.x" };
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => (data += c));
-    req.on("end", () => resolve(data));
-    req.on("error", reject);
-  });
-}
-
-export default async function handler(req, res) {
+// Force Node runtime for this function
+async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     res.setHeader("Content-Type", "application/json");
@@ -20,7 +10,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const raw = await readBody(req);
+    const raw = await new Promise((resolve, reject) => {
+      let data = "";
+      req.on("data", (c) => (data += c));
+      req.on("end", () => resolve(data));
+      req.on("error", reject);
+    });
     const body = raw ? JSON.parse(raw) : {};
     const { model = "gpt-4o-mini", messages = [], meta = {} } = body;
 
@@ -36,7 +31,6 @@ export default async function handler(req, res) {
       content: String(m?.content ?? "").slice(0, 6000),
     }));
 
-    // Call OpenAI
     const apiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -49,8 +43,7 @@ export default async function handler(req, res) {
           {
             role: "system",
             content:
-              "Concise, practical Rocket League 2v2 rank coaching. " +
-              "Use the client heuristic only as a hint. No emojis.",
+              "Concise, practical Rocket League 2v2 rank coaching. Use the client heuristic only as a hint. No emojis.",
           },
           ...trimmed,
           ...(Object.keys(meta || {}).length
@@ -66,7 +59,6 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "application/json");
 
     if (!apiResp.ok) {
-      // Pass OpenAI error text through as JSON
       return res
         .status(apiResp.status)
         .send(JSON.stringify({ error: "openai_error", details: text }));
@@ -80,3 +72,6 @@ export default async function handler(req, res) {
     return res.status(500).send(JSON.stringify({ error: "server_error", details: String(e) }));
   }
 }
+
+module.exports = handler;
+module.exports.config = { runtime: "nodejs" };
