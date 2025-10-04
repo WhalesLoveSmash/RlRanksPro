@@ -1,0 +1,125 @@
+{
+  "version": "1.0.0",
+  "_notes": [
+    "All weights are *approximate* MMR deltas contributed by each factor.",
+    "Positive numbers push your projection up; negatives pull it down.",
+    "Units are listed per factor. Booleans use 0 or 1. Scales use the described range.",
+    "Tune freely. This file is shipped publicly — it's just heuristics, not secret sauce."
+  ],
+
+  "scale": {
+    "kind": "mmr_delta",
+    "about": "Each factor contributes weight * value to the final MMR adjustment."
+  },
+
+  "defaults": {
+    "assume_missing_is_neutral": true,
+    "cap_total_delta_mmr": 120,
+    "soft_cap_start": 80
+  },
+
+  "factors": {
+    "sleep_hours": {
+      "unit": "hours",
+      "range": [0, 12],
+      "target": 7.5,
+      "per_unit_from_target": -6,
+      "_hint": "Penalty per hour away from target. If you slept 5h, delta = (5 - 7.5) * -6 = -15."
+    },
+
+    "new_monitor_today": {
+      "unit": "boolean",
+      "weight": -8,
+      "_hint": "New gear jitters. 1 if true, else 0."
+    },
+
+    "headache_mild": {
+      "unit": "boolean",
+      "weight": -10,
+      "_hint": "Light strain still matters. 1 if yes, else 0."
+    },
+
+    "headache_bad": {
+      "unit": "boolean",
+      "weight": -22,
+      "_hint": "Hard hit to consistency. 1 if yes, else 0."
+    },
+
+    "controller_issue": {
+      "unit": "scale_0_3",
+      "weight_per_step": -9,
+      "_hint": "0 none, 1 slight, 2 annoying, 3 borderline unplayable."
+    },
+
+    "ping_ms": {
+      "unit": "ms_over_ideal",
+      "ideal_ms": 40,
+      "per_ms_over_ideal": -0.35,
+      "max_considered_ms": 120,
+      "_hint": "Only penalize above ideal. Example: 70ms -> 30ms over ideal -> ~-10.5 MMR."
+    },
+
+    "packet_loss_pct": {
+      "unit": "percent",
+      "per_pct": -3.5,
+      "max_pct": 8
+    },
+
+    "input_lag_frames": {
+      "unit": "frames",
+      "per_frame": -4.5,
+      "max_frames": 6
+    },
+
+    "tilt_level": {
+      "unit": "scale_0_3",
+      "weight_per_step": -7,
+      "_hint": "0 calm, 1 irked, 2 tilted, 3 molding."
+    },
+
+    "energy_drink_recent": {
+      "unit": "boolean",
+      "weight": 3,
+      "_hint": "Tiny buff if you tolerate it; tune however you like."
+    },
+
+    "warmup_matches": {
+      "unit": "matches",
+      "per_match": 2.5,
+      "max_matches": 6
+    },
+
+    "teammates_toxicity": {
+      "unit": "scale_0_3",
+      "weight_per_step": -6,
+      "_hint": "0 chill, 3 chaos in comms."
+    },
+
+    "comms_quality": {
+      "unit": "scale_0_3",
+      "weight_per_step": 4,
+      "_hint": "0 none, 3 crisp. Positive because good comms help."
+    },
+
+    "time_of_day_block": {
+      "unit": "category",
+      "weights": {
+        "late_night": -5,
+        "morning": 2,
+        "afternoon": 0,
+        "evening": -2
+      },
+      "_hint": "Pick one label and apply its weight."
+    },
+
+    "queue_streak_state": {
+      "unit": "category",
+      "weights": {
+        "fresh": 0,
+        "on_heater": 8,
+        "cold": -6
+      },
+      "_hint": "Fresh=just started. On_heater=recent wins. Cold=recent losses."
+    }
+  }
+}

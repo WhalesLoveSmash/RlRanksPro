@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#0B1322"></rect>
+  <!-- soft outer glow -->
+  <g filter="url(#g0)">
+    <circle cx="256" cy="256" r="160" fill="#101E35"></circle>
+  </g>
+
+  <!-- chevron (rank) -->
+  <path d="M128 256l80 80 176-176" stroke="#6BD38A" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"></path>
+
+  <!-- spark -->
+  <g filter="url(#g1)">
+    <circle cx="384" cy="160" r="14" fill="#FFD36A"></circle>
+  </g>
+
+  <!-- inner highlight -->
+  <path d="M136 252l72 72 160-160" stroke="url(#lg)" stroke-width="14" stroke-linecap="round"></path>
+
+  <defs>
+    <linearGradient id="lg" x1="136" y1="252" x2="368" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6BD38A"></stop>
+      <stop offset="1" stop-color="#6AA7FF"></stop>
+    </linearGradient>
+    <filter id="g0" x="56" y="56" width="400" height="400" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="24"></feGaussianBlur>
+    </filter>
+    <filter id="g1" x="350" y="126" width="68" height="68" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8"></feGaussianBlur>
+    </filter>
+  </defs>
+</svg>

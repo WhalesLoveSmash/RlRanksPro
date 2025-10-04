@@ -1,0 +1,11 @@
+{
+  "name": "rlrankspro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "make:icons": "node tools/make-icons.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.3"
+  }
+}
